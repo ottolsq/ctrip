@@ -2,7 +2,9 @@ package com.ctrip.user.security;
 
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.TokenExpiredException;
+import com.ctrip.common.response.ApiResponse;
 import com.ctrip.user.service.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -47,9 +49,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
         this.jwtService = jwtService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -104,8 +108,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write(
-                "{\"success\":false,\"data\":null,\"error\":\"" + message + "\"}"
-        );
+        response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error(message)));
     }
 }

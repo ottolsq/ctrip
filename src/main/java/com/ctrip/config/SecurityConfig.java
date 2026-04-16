@@ -1,7 +1,9 @@
 package com.ctrip.config;
 
+import com.ctrip.common.response.ApiResponse;
 import com.ctrip.user.security.JwtAuthenticationFilter;
 import com.ctrip.user.service.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +33,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <ul>
  *   <li>{@link JwtAuthenticationFilter}：在此处以 {@code @Bean} 方式创建，而非在过滤器类上标注
  *       {@code @Component}，防止 Spring Boot 自动注册为 Servlet Filter 导致双重执行。
+ *   <li>{@link ObjectMapper}：显式声明，因 SB 4.x webmvc starter 不含 JSON starter，
+ *       {@code JacksonAutoConfiguration} 不会自动激活，过滤器需注入此 bean 序列化错误响应。
  *   <li>{@link PasswordEncoder}：BCrypt 强度 12，供 {@code AuthServiceImpl} 注入使用。
  *   <li>{@link AuthenticationManager}：暴露为 bean，供 {@code AuthServiceImpl} 可选注入，
  *       使用 Spring Security 标准认证流程（{@code DaoAuthenticationProvider}）验证用户凭据。
@@ -47,8 +51,8 @@ public class SecurityConfig {
      * 仅通过 {@link #securityFilterChain} 中的 {@code addFilterBefore} 纳入 Security 过滤链。
      */
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
-        return new JwtAuthenticationFilter(jwtService);
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
+        return new JwtAuthenticationFilter(jwtService, objectMapper);
     }
 
     /**
@@ -64,7 +68,8 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationFilter jwtAuthFilter) throws Exception {
+                                                   JwtAuthenticationFilter jwtAuthFilter,
+                                                   ObjectMapper objectMapper) throws Exception {
         http
             // 无状态 API 基础设置
             .csrf(AbstractHttpConfigurer::disable)
@@ -86,18 +91,14 @@ public class SecurityConfig {
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    response.getWriter().write(
-                        "{\"success\":false,\"data\":null,\"error\":\"请先登录\"}"
-                    );
+                    response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error("请先登录")));
                 })
                 .accessDeniedHandler((request, response, e) -> {
                     // 已认证但权限不足（当前系统暂无角色体系，此分支基本不触发）
                     response.setStatus(HttpStatus.FORBIDDEN.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    response.getWriter().write(
-                        "{\"success\":false,\"data\":null,\"error\":\"权限不足\"}"
-                    );
+                    response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error("权限不足")));
                 })
             )
 
@@ -105,6 +106,17 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Jackson ObjectMapper bean。
+     *
+     * <p>spring-boot-starter-webmvc（SB 4.x）不包含 spring-boot-starter-json，
+     * JacksonAutoConfiguration 不会自动激活，需在此处显式声明以供 Security 过滤器使用。
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 
     /**

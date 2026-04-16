@@ -44,4 +44,19 @@ public interface JwtService {
      * @return {@code true} 表示 token 合法且未过期
      */
     boolean isTokenValid(String token);
+
+    /**
+     * 返回 access token 有效期秒数，供 TokenResponse 使用。
+     *
+     * @return access token 有效期（秒）
+     */
+    long getAccessTokenExpiresInSeconds();
+
+    /**
+     * 计算并返回新 refresh token 的过期时间点。
+     * 封装时间计算，使 AuthService 不需要直接依赖 JwtConfig。
+     *
+     * @return refresh token 过期时间（LocalDateTime）
+     */
+    java.time.LocalDateTime calculateRefreshTokenExpiry();
 }

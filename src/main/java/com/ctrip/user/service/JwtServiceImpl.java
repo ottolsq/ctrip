@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
 /**
@@ -100,6 +102,18 @@ public class JwtServiceImpl implements JwtService {
         } catch (TokenExpiredException | AuthenticationException e) {
             return false;
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public long getAccessTokenExpiresInSeconds() {
+        return jwtConfig.getAccessTokenExpirationMs() / 1000;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public LocalDateTime calculateRefreshTokenExpiry() {
+        return LocalDateTime.now().plus(jwtConfig.getRefreshTokenExpirationMs(), ChronoUnit.MILLIS);
     }
 
     // ── 私有辅助 ─────────────────────────────────────────────────────────────
