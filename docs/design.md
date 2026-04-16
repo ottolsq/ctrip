@@ -481,9 +481,9 @@ public record ApiResponse<T>(boolean success, T data, String error) {
 | 8 | `JwtConfig`（`@ConfigurationProperties`） | ✅ 已完成 |
 | 9 | `JwtService` 接口 + `JwtServiceImpl` | ✅ 已完成 |
 | 10 | `SecurityConfig` 骨架（先放行所有请求，让应用能启动） | ✅ 已完成 |
-| 11 | `UserDetailsServiceImpl` | 待完成 |
-| 12 | `JwtAuthenticationFilter` | 待完成 |
-| 13 | `SecurityConfig` 最终版（锁定路由） | 待完成 |
+| 11 | `UserDetailsServiceImpl` | ✅ 已完成 |
+| 12 | `JwtAuthenticationFilter` | ✅ 已完成 |
+| 13 | `SecurityConfig` 最终版（锁定路由） | ✅ 已完成 |
 | 14 | `AuthServiceImpl` | 待完成 |
 | 15 | `UserServiceImpl` | 待完成 |
 | 16 | `AuthController` | 待完成 |

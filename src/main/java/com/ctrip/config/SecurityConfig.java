@@ -1,7 +1,14 @@
 package com.ctrip.config;
 
+import com.ctrip.user.security.JwtAuthenticationFilter;
+import com.ctrip.user.service.JwtService;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -9,19 +16,24 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Spring Security 配置（骨架版）。
+ * Spring Security 最终配置。
  *
- * <p>当前阶段目标：让应用能正常启动，方便对 Mapper / JwtService 等底层组件进行测试。
- * 所有请求均放行，不做任何身份验证拦截。
- *
- * <p><b>注意：此为临时配置，步骤 13 会替换为最终版（锁定路由、接入 JWT 过滤器）。</b>
- *
- * <h3>已定义的常驻 Bean</h3>
+ * <h3>路由授权规则</h3>
  * <ul>
- *   <li>{@link PasswordEncoder}：BCrypt 强度 12，供 {@code AuthServiceImpl}（步骤 14）注入使用。
- *       放在此处而非 AuthService 内部，避免循环依赖，也便于测试时单独注入。
+ *   <li>{@code /api/v1/auth/**} → 无需认证（注册、登录、刷新 token、找回密码等公开端点）。
+ *   <li>其他所有路径 → 必须携带有效 JWT access token。
+ * </ul>
+ *
+ * <h3>Bean 说明</h3>
+ * <ul>
+ *   <li>{@link JwtAuthenticationFilter}：在此处以 {@code @Bean} 方式创建，而非在过滤器类上标注
+ *       {@code @Component}，防止 Spring Boot 自动注册为 Servlet Filter 导致双重执行。
+ *   <li>{@link PasswordEncoder}：BCrypt 强度 12，供 {@code AuthServiceImpl} 注入使用。
+ *   <li>{@link AuthenticationManager}：暴露为 bean，供 {@code AuthServiceImpl} 可选注入，
+ *       使用 Spring Security 标准认证流程（{@code DaoAuthenticationProvider}）验证用户凭据。
  * </ul>
  */
 @Configuration
@@ -29,28 +41,68 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     /**
-     * 安全过滤链（骨架版）：放行所有请求。
+     * JWT 认证过滤器 bean。
      *
-     * <p>禁用项：
+     * <p>以 {@code @Bean} 方式声明，Spring Boot 不会将其自动注册为 Servlet Filter，
+     * 仅通过 {@link #securityFilterChain} 中的 {@code addFilterBefore} 纳入 Security 过滤链。
+     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
+        return new JwtAuthenticationFilter(jwtService);
+    }
+
+    /**
+     * 安全过滤链（最终版）。
+     *
+     * <p>核心配置：
      * <ul>
-     *   <li>CSRF：无状态 REST API 不需要（最终版保持禁用）。
-     *   <li>Session：{@code STATELESS}，认证状态完全由 JWT 承载（最终版保持不变）。
-     *   <li>HttpBasic / FormLogin：API 服务不使用浏览器登录表单（最终版保持禁用）。
+     *   <li>禁用 CSRF / Session / HttpBasic / FormLogin（无状态 REST API）。
+     *   <li>认证端点白名单放行，其余要求认证。
+     *   <li>未认证 → 401 JSON；权限不足 → 403 JSON（不重定向）。
+     *   <li>JWT 过滤器插入 {@link UsernamePasswordAuthenticationFilter} 之前。
      * </ul>
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthenticationFilter jwtAuthFilter) throws Exception {
         http
-            // 禁用 CSRF：无状态 API 不需要
+            // 无状态 API 基础设置
             .csrf(AbstractHttpConfigurer::disable)
-            // 禁用 Session：认证状态由 JWT 承载
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            // 禁用 HTTP Basic 和 Form Login
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
-            // 骨架阶段：放行所有请求（步骤 13 替换为路由白名单）
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+            // 路由授权：认证端点公开，其余需要 JWT
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .anyRequest().authenticated()
+            )
+
+            // 异常处理：统一返回 JSON，不重定向
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, e) -> {
+                    // 未认证（无 token 或 token 被 filter 拦截后未设置 SecurityContext）
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write(
+                        "{\"success\":false,\"data\":null,\"error\":\"请先登录\"}"
+                    );
+                })
+                .accessDeniedHandler((request, response, e) -> {
+                    // 已认证但权限不足（当前系统暂无角色体系，此分支基本不触发）
+                    response.setStatus(HttpStatus.FORBIDDEN.value());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write(
+                        "{\"success\":false,\"data\":null,\"error\":\"权限不足\"}"
+                    );
+                })
+            )
+
+            // JWT 过滤器：在 Spring Security 的用户名密码过滤器之前执行
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -64,5 +116,18 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
+    }
+
+    /**
+     * 暴露 {@link AuthenticationManager} bean。
+     *
+     * <p>Spring Boot 不会自动将 AuthenticationManager 暴露为 bean，需显式声明。
+     * {@code AuthServiceImpl} 可注入此 bean，利用 Spring Security 标准的
+     * {@code DaoAuthenticationProvider}（自动检测 {@code UserDetailsServiceImpl}）
+     * 完成用户名/密码验证，也可选择直接调用 {@code UserMapper + PasswordEncoder} 手动验证。
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }
