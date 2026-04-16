@@ -28,10 +28,12 @@
 | 语言 | Java | 25 |
 | 框架 | Spring Boot | 4.0.5 |
 | Web 层 | Spring MVC | 随 Boot |
-| 持久层 | Spring Data JPA + Hibernate | 随 Boot |
-| 数据库 | MySQL | 8.x |
+| 持久层 | MyBatis Plus | 3.5.x |
+| 数据库 | MySQL | 8.1 |
 | 安全 | Spring Security + JJWT | 随 Boot / 0.12.6 |
 | 构建工具 | Maven Wrapper | 3.9.14 |
+
+> **包命名说明：** groupId `com.ctrip`，artifactId `backend`，Java 根包为 `com.ctrip`（不使用 groupId+artifactId 拼接，避免 `com.ctrip.ctrip` 重复）。
 
 ---
 
@@ -40,7 +42,7 @@
 ### 包结构
 
 ```
-com.ctrip.ctrip/
+com.ctrip/   ← 根包（groupId=com.ctrip，artifactId=backend）
 ├── CtripApplication.java
 │
 ├── common/
@@ -60,7 +62,8 @@ com.ctrip.ctrip/
 ├── config/
 │   ├── SecurityConfig.java
 │   ├── JwtConfig.java                      # @ConfigurationProperties
-│   └── RateLimitConfig.java
+│   ├── RateLimitConfig.java
+│   └── MybatisPlusConfig.java              # MetaObjectHandler，处理 createdAt/updatedAt/issuedAt 自动填充
 │
 └── user/
     ├── controller/
@@ -75,12 +78,14 @@ com.ctrip.ctrip/
     │   ├── JwtServiceImpl.java
     │   ├── SmsService.java                 # 接口（对外发短信）
     │   └── EmailService.java               # 接口（对外发邮件）
-    ├── repository/
-    │   ├── UserRepository.java
-    │   └── RefreshTokenRepository.java
+    ├── mapper/                             # MyBatis Plus Mapper 接口
+    │   ├── UserMapper.java                 # extends BaseMapper<User>
+    │   ├── RefreshTokenMapper.java         # extends BaseMapper<RefreshToken>
+    │   └── PasswordResetTokenMapper.java   # extends BaseMapper<PasswordResetToken>
     ├── entity/
-    │   ├── User.java
-    │   ├── RefreshToken.java
+    │   ├── User.java                       # @TableName("users")
+    │   ├── RefreshToken.java               # @TableName("refresh_tokens")
+    │   ├── PasswordResetToken.java         # @TableName("password_reset_tokens")
     │   └── enums/
     │       ├── UserStatus.java             # ACTIVE, SUSPENDED, UNVERIFIED, DELETED
     │       └── Gender.java                 # MALE, FEMALE, UNSPECIFIED
@@ -101,8 +106,8 @@ com.ctrip.ctrip/
     ├── security/
     │   ├── JwtAuthenticationFilter.java    # OncePerRequestFilter
     │   └── UserDetailsServiceImpl.java
-    └── mapper/
-        └── UserMapper.java
+    └── converter/
+        └── UserConverter.java              # Entity ↔ DTO 静态转换方法
 ```
 
 ---
@@ -187,10 +192,11 @@ CREATE INDEX idx_prt_user_id ON password_reset_tokens (user_id);
 ### pom.xml 新增依赖
 
 ```xml
-<!-- JPA / Hibernate -->
+<!-- MyBatis Plus（Spring Boot 3/4 通用 starter） -->
 <dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-jpa</artifactId>
+    <groupId>com.baomidou</groupId>
+    <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+    <version>3.5.12</version>
 </dependency>
 
 <!-- Spring Security -->
@@ -259,11 +265,15 @@ spring.datasource.username=${DB_USERNAME}
 spring.datasource.password=${DB_PASSWORD}
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
-# JPA
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.show-sql=false
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
-spring.jpa.open-in-view=false
+# MyBatis Plus
+mybatis-plus.mapper-locations=classpath*:mapper/**/*.xml
+mybatis-plus.type-aliases-package=com.ctrip.user.entity
+mybatis-plus.configuration.map-underscore-to-camel-case=true
+mybatis-plus.configuration.log-impl=org.apache.ibatis.logging.nologging.NoLoggingImpl
+mybatis-plus.global-config.db-config.id-type=auto
+# 枚举包扫描：让 MyBatis Plus 识别 @EnumValue 注解，自动完成枚举与数据库值的互转
+mybatis-plus.type-enums-package=com.ctrip.user.entity.enums
+# 注意：不使用 MyBatis Plus 逻辑删除插件，软删除通过 UserStatus.DELETED（status=3）实现
 
 # JWT
 app.jwt.secret=${JWT_SECRET}
@@ -321,15 +331,17 @@ app.rate-limit.auth.refill-duration-seconds=60
 |----|------|
 | Controller | 解析请求、校验、调用 Service、包装 ApiResponse；禁止含业务逻辑 |
 | Service | 业务编排、事务边界（`@Transactional`）、DTO ↔ Entity 转换 |
-| Repository | 数据访问（JPA）；只返回 Entity / 基本类型 |
-| Entity | 持久化映射；不暴露给 Controller 层 |
+| Mapper | 数据访问（MyBatis Plus `BaseMapper<T>`）；只返回 Entity / 基本类型 |
+| Entity | `@TableName` 映射；`@TableId`/`@TableField` 管理字段；不暴露给 Controller |
 | DTO | `record` 类型；Request 含校验注解，Response 为只读视图 |
+| Converter | 静态方法完成 Entity ↔ DTO 转换；无 Spring Bean，无状态 |
 | Security | JWT 过滤、UserDetails 加载；不含业务逻辑 |
 
 **核心规则：**
 - 构造器注入，禁止字段 `@Autowired`
-- 读操作加 `@Transactional(readOnly = true)`
-- Entity 不直接返回给 Controller，必须经 Mapper 转 DTO
+- 写操作加 `@Transactional`，读操作可省略（MyBatis 默认 auto-commit）
+- Entity 不直接返回给 Controller，必须经 Converter 转 DTO
+- Entity 用 Lombok `@Data` + `@Builder`，`@TableField(fill=...)` 处理自动填充
 
 ---
 
@@ -456,23 +468,24 @@ public record ApiResponse<T>(boolean success, T data, String error) {
 
 ### 实施顺序
 
-| 步骤 | 内容 |
-|------|------|
-| 1 | 执行 DDL，建 3 张表 |
-| 2 | `pom.xml` 新增依赖，验证编译通过 |
-| 3 | `application.properties` 添加配置 |
-| 4 | Enum：`UserStatus`、`Gender` |
-| 5 | Entity：`User`、`RefreshToken` |
-| 6 | Repository：`UserRepository`、`RefreshTokenRepository` |
-| 7 | 公共层：`ApiResponse`、异常体系、`GlobalExceptionHandler` |
-| 8 | `JwtConfig`（`@ConfigurationProperties`） |
-| 9 | `JwtServiceImpl`（纯逻辑，可独立测试） |
-| 10 | `SecurityConfig` 骨架（先放行所有请求，让应用能启动） |
-| 11 | `UserDetailsServiceImpl` |
-| 12 | `JwtAuthenticationFilter` |
-| 13 | `SecurityConfig` 最终版（锁定路由） |
-| 14 | `AuthServiceImpl` |
-| 15 | `UserServiceImpl` |
-| 16 | `AuthController` |
-| 17 | `UserController` |
-| 18 | `RateLimitConfig` + `RateLimitInterceptor` |
+| 步骤 | 内容 | 状态 |
+|------|------|------|
+| 1 | 执行 DDL，建 3 张表 | ⏳ 待执行（需本地 MySQL 手动操作） |
+| 2 | `pom.xml` 新增依赖，验证编译通过 | ✅ 已完成 |
+| 3 | `application.properties` 添加配置 | ✅ 已完成 |
+| 4 | Enum：`UserStatus`、`Gender` | ✅ 已完成 |
+| 5 | Entity：`User`、`RefreshToken`、`PasswordResetToken` | ✅ 已完成 |
+| 6 | Mapper：`UserMapper`、`RefreshTokenMapper`、`PasswordResetTokenMapper` | ✅ 已完成 |
+| 6.5 | `MybatisPlusConfig`（`MetaObjectHandler` 自动填充实现） | ✅ 已完成 |
+| 7 | 公共层：`ApiResponse`、异常体系、`PhoneNumber`、`GlobalExceptionHandler` | ✅ 已完成 |
+| 8 | `JwtConfig`（`@ConfigurationProperties`） | ✅ 已完成 |
+| 9 | `JwtService` 接口 + `JwtServiceImpl` | ✅ 已完成 |
+| 10 | `SecurityConfig` 骨架（先放行所有请求，让应用能启动） | ✅ 已完成 |
+| 11 | `UserDetailsServiceImpl` | 待完成 |
+| 12 | `JwtAuthenticationFilter` | 待完成 |
+| 13 | `SecurityConfig` 最终版（锁定路由） | 待完成 |
+| 14 | `AuthServiceImpl` | 待完成 |
+| 15 | `UserServiceImpl` | 待完成 |
+| 16 | `AuthController` | 待完成 |
+| 17 | `UserController` | 待完成 |
+| 18 | `RateLimitConfig` + `RateLimitInterceptor` | 待完成 |
