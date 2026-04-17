@@ -28,9 +28,9 @@
 | 层级 | 技术 | 版本 |
 |------|------|------|
 | 语言 | Java | 25 |
-| 框架 | Spring Boot | 4.0.5 |
+| 框架 | Spring Boot | 3.5.13 |
 | Web 层 | Spring MVC | 随 Boot |
-| 持久层 | MyBatis Plus | 3.5.x |
+| 持久层 | MyBatis Plus | 3.5.12 |
 | 数据库 | MySQL | 8.1 |
 | 安全 | Spring Security + JJWT | 随 Boot / 0.12.6 |
 | 构建工具 | Maven Wrapper | 3.9.14 |
@@ -62,7 +62,7 @@ com.ctrip/   ← 根包（groupId=com.ctrip，artifactId=backend）
 │       └── GlobalExceptionHandler.java     # @RestControllerAdvice
 │
 ├── config/
-│   ├── SecurityConfig.java
+│   ├── SecurityConfig.java                 # 含 ObjectMapper Bean（显式注册 JavaTimeModule）
 │   ├── JwtConfig.java                      # @ConfigurationProperties
 │   ├── RateLimitConfig.java                # @ConfigurationProperties，限流参数
 │   ├── WebConfig.java                      # @EnableConfigurationProperties + 注册 RateLimitInterceptor
@@ -257,11 +257,16 @@ CREATE INDEX idx_prt_user_id ON password_reset_tokens (user_id);
     <optional>true</optional>
 </dependency>
 
-<!-- Jackson：ObjectMapper 供 Filter / SecurityConfig / RateLimitInterceptor 使用
-     spring-boot-starter-webmvc（SB 4.x）不自动引入 Jackson，需显式声明 -->
+<!-- Jackson：ObjectMapper 供 Filter / SecurityConfig / RateLimitInterceptor 使用 -->
 <dependency>
     <groupId>com.fasterxml.jackson.core</groupId>
     <artifactId>jackson-databind</artifactId>
+</dependency>
+
+<!-- Jackson JSR310：Java 8 时间类型（LocalDateTime 等）序列化支持 -->
+<dependency>
+    <groupId>com.fasterxml.jackson.datatype</groupId>
+    <artifactId>jackson-datatype-jsr310</artifactId>
 </dependency>
 
 <!-- H2 内存数据库：仅用于 CI 单元测试，替换 MySQL 连接（test scope） -->
@@ -278,6 +283,11 @@ CREATE INDEX idx_prt_user_id ON password_reset_tokens (user_id);
 
 ```properties
 spring.application.name=ctrip
+
+# ===== 日志级别（开发调试）=====
+# Stub 服务使用 log.debug 输出验证码/OTP，需开启 DEBUG 级别才能在控制台看到
+logging.level.com.ctrip.user.service.StubSmsServiceImpl=DEBUG
+logging.level.com.ctrip.user.service.StubEmailServiceImpl=DEBUG
 
 # ===== 数据源 =====
 # 开发阶段使用硬编码明文（见"数据库凭据 C-1"说明），生产环境须改为环境变量注入
@@ -628,3 +638,9 @@ spring.datasource.password=123456
 | L-2 | `refresh_tokens` 中已吊销/过期的 token 不自动清理 | DB 表持续增长，历史 token 查询干扰 | 同上，定时任务清理 `revoked=true` 或 `expires_at < NOW()` 的记录 |
 | L-3 | `ChangePasswordRequest` 无旧密码强度 / 新旧密码相同校验 | 用户可将密码改为与旧密码相同的值而无感知 | 在 `UserServiceImpl.changePassword` 中加相等性检查 |
 | L-4 | `UserConverter` 将 `UserStatus` 枚举直接 `.name()` 暴露给前端，枚举重命名会破坏 API 协议 | 接口不稳定 | 定义固定的字符串常量映射，与枚举内部名解耦 |
+
+#### 文档同步更新（D-7）
+
+| 编号 | 问题 | 处理方式 |
+|------|------|---------|
+| D-7 | 技术栈版本号与实际 pom.xml 不一致；pom.xml 依赖说明缺失 `jackson-datatype-jsr310`；application.properties 缺少 Stub 服务日志配置 | 已更新：Spring Boot 版本改为 3.5.13，MyBatis Plus 版本改为 3.5.12，补充 JSR310 依赖说明，补充 Stub 服务 DEBUG 日志配置说明 |

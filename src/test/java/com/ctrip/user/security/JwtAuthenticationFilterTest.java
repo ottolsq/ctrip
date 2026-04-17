@@ -3,6 +3,7 @@ package com.ctrip.user.security;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.TokenExpiredException;
 import com.ctrip.user.service.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -39,19 +40,24 @@ import static org.mockito.Mockito.when;
 @DisplayName("JwtAuthenticationFilter 单元测试")
 class JwtAuthenticationFilterTest {
 
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
+
     @Mock
     private JwtService jwtService;
 
     @Mock
     private FilterChain filterChain;
 
+    private ObjectMapper objectMapper;
     private JwtAuthenticationFilter filter;
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtService);
+        objectMapper = new ObjectMapper();
+        filter = new JwtAuthenticationFilter(jwtService, objectMapper);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }
@@ -74,9 +80,20 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("Authorization 头为空字符串：跳过 JWT 验证，继续过滤链")
+    void emptyAuthorizationHeader_shouldContinueFilterChain() throws ServletException, IOException {
+        request.addHeader(AUTHORIZATION_HEADER, "");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
     @DisplayName("Authorization 头为 Basic 格式（非 Bearer）：跳过 JWT 验证，继续过滤链")
     void basicAuthorizationHeader_shouldContinueFilterChain() throws ServletException, IOException {
-        request.addHeader("Authorization", "Basic dXNlcjpwYXNz");
+        request.addHeader(AUTHORIZATION_HEADER, "Basic dXNlcjpwYXNz");
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -89,7 +106,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("有效 JWT：将 userId 写入 SecurityContext（principal = Long），继续过滤链")
     void validToken_shouldSetSecurityContextAndContinueFilterChain() throws ServletException, IOException {
-        request.addHeader("Authorization", "Bearer valid.jwt.token");
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "valid.jwt.token");
         when(jwtService.extractUserId("valid.jwt.token")).thenReturn(42L);
 
         filter.doFilterInternal(request, response, filterChain);
@@ -102,6 +119,27 @@ class JwtAuthenticationFilterTest {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isEqualTo(42L);
+        assertThat(auth.getCredentials()).isNull();
+        assertThat(auth.getAuthorities()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("SecurityContext 已有认证时：不覆盖已有认证")
+    void existingAuthentication_shouldNotOverwrite() throws ServletException, IOException {
+        // 预先设置认证
+        var existingAuth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                99L, null, java.util.Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(existingAuth);
+
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "another.jwt.token");
+        when(jwtService.extractUserId("another.jwt.token")).thenReturn(42L);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        // principal 应保持不变
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth.getPrincipal()).isEqualTo(99L);
     }
 
     // ── JWT 异常场景（停止过滤链，直接写 401 响应）──────────────────────────
@@ -109,7 +147,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("过期 JWT：返回 401 JSON 错误响应，过滤链不继续")
     void expiredToken_shouldReturn401AndStopFilterChain() throws ServletException, IOException {
-        request.addHeader("Authorization", "Bearer expired.jwt.token");
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "expired.jwt.token");
         when(jwtService.extractUserId("expired.jwt.token"))
                 .thenThrow(new TokenExpiredException("access token 已过期"));
 
@@ -127,7 +165,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("签名无效 JWT（篡改/错误密钥）：返回 401 JSON 错误响应，过滤链不继续")
     void invalidToken_shouldReturn401AndStopFilterChain() throws ServletException, IOException {
-        request.addHeader("Authorization", "Bearer invalid.jwt.token");
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "invalid.jwt.token");
         when(jwtService.extractUserId("invalid.jwt.token"))
                 .thenThrow(new AuthenticationException("无效的 access token"));
 
