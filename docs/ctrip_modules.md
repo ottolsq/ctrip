@@ -379,3 +379,88 @@
 |------|------|-------|
 | W7 | 性能优化 + 安全加固 | 压测报告、安全扫描通过 |
 | W8 | 灰度发布 + 正式上线 | 生产环境部署、监控就绪 |
+
+---
+
+## 十、从设计文档提取的未解决问题
+
+> 以下问题来自 `docs/design.md` 代码审查记录，尚未修复，后续迭代按优先级处理。
+
+### MEDIUM 优先级
+
+| 编号 | 问题 | 影响 | 建议方案 |
+|------|------|------|---------|
+| M-1 | `RateLimitInterceptor` 的 `ConcurrentHashMap<String, Bucket>` 无淘汰机制，长期运行 key 数量线性增长 | 内存泄漏，高流量下实例重启才能释放 | 替换为 Caffeine `Cache<String, Bucket>`（`expireAfterAccess(10, MINUTES)`，设置 `maximumSize`） |
+| M-2 | `StubSmsServiceImpl` 验证码内存缓存未做并发安全的原子操作（put + expiry 检查分两步） | 极低概率的并发竞态，验证码可被重用 | 将存储结构改为 `ConcurrentHashMap<String, CodeEntry>`，用 `compute` 原子替换 |
+| M-3 | `UserDetailsServiceImpl.loadUserByUsername` 按 email 查找，而 `AuthServiceImpl.login` 走独立的 `findUserByCredential`，两套查找路径不同步 | 未来若 `UserDetailsService` 路径被某场景激活，行为与预期不符 | 统一 `UserDetailsServiceImpl` 支持 email / phone 查找，或将 `findUserByCredential` 提取为共用私有方法 |
+
+### LOW 优先级
+
+| 编号 | 问题 | 影响 | 建议方案 |
+|------|------|------|---------|
+| L-1 | `password_reset_tokens` 使用后标记 `used=true` 但不清理，旧记录长期驻留 | DB 表持续增长 | 定时任务每天清理 `used=true` 或 `expires_at < NOW() - 7天` 的记录 |
+| L-2 | `refresh_tokens` 中已吊销/过期的 token 不自动清理 | DB 表持续增长 | 定时任务清理 `revoked=true` 或 `expires_at < NOW()` 的记录 |
+| L-3 | `ChangePasswordRequest` 无旧密码强度 / 新旧密码相同校验 | 用户可将密码改为与旧密码相同的值而无感知 | 在 `UserServiceImpl.changePassword` 中加相等性检查 |
+| L-4 | `UserConverter` 将 `UserStatus` 枚举直接 `.name()` 暴露给前端，枚举重命名会破坏 API 协议 | 接口不稳定 | 定义固定的字符串常量映射，与枚举内部名解耦 |
+
+---
+
+## 十一、内容模块实现后待办
+
+> 以下内容模块代码已创建（Entity/Mapper/DTO/Converter/Service/Controller 共 42 个 Java 文件），但以下配置尚未完成，需在后续步骤中补充。
+
+### 1. Spring Security 权限配置
+
+- **问题**：管理端接口（`/api/v1/admin/**`）需要 ADMIN 角色权限保护，当前尚未配置
+- **需要**：在 Security 配置中添加 `/api/v1/admin/**` 需要 `ROLE_ADMIN` 的规则
+- **涉及文件**：`SecurityConfig.java`、`JwtAuthenticationFilter.java`
+- **同时**：需确认 JWT 过滤器覆盖 content 模块的所有路径
+
+#### 管理员角色方案设计决策（2026-05-19）
+
+当前 `ctrip_user` 表无 `role` 字段，JWT token 只包含 `userId`。两种方案对比：
+
+**方案 A：配置文件指定 admin userId 列表**（当前采用）
+- 在 `application.properties` 新增 `app.admin-ids=1,2`，登录时判断 userId 是否在此列表中
+- **好处**：零数据库改动、配置简单、适合早期独立开发阶段
+- **坏处**：
+  - 每次新增管理员需改配置 + 重启，无法运行时动态切换
+  - 只有"是/不是 admin"二元判断，后续如需运营/审核员等多角色体系则不适用
+  - userId 硬绑定，自增 ID 下需先注册再查 ID 再填配置
+- **适用**：当前阶段完全够用，管理员数量极少（1-2 人）
+
+**方案 B：user 表增加 role 字段**
+- 在 `ctrip_user` 表加 `role` 字段（`VARCHAR`），登录时查库写入 JWT claims
+- **好处**：支持多角色、运行时可通过管理后台变更、可扩展性强
+- **坏处**：需要改数据库 + 实体 + JWTService + JwtFilter，改动面较广
+- **适用**：角色变复杂后再迁移，改动面窄（只影响 JwtFilter 和 SecurityConfig）
+
+**决策**：当前用方案 A。后续角色需求变复杂时，加 `role` 字段重构成本很低。
+
+
+
+==需要对 user 进行重构，需要有多种角色，管理员、用户、内容运维人员，需要进一步分析==
+
+
+
+### 2. 文件上传配置 ✅ 已完成
+
+- `application.properties` 已添加 `app.upload.dir`、`app.upload.base-url`、`spring.servlet.multipart.*` 配置
+
+### 3. MyBatis Plus 分页插件 ✅ 已完成（自动配置）
+
+- MyBatis Plus 3.5.12 `spring-boot3-starter` 已通过 `MybatisPlusAutoConfiguration` 自动注册分页插件
+- `Page` + `selectPage` 可直接使用，无需手动注册
+
+### 4. 评论删除路径 ✅ 已完成
+
+- `CommentController.delete()` 已改为独立路径 `DELETE /api/v1/comments/{commentId}`
+
+### 5. 静态资源映射 ✅ 已完成
+
+- `WebConfig.addResourceHandlers()` 已注册 `/uploads/**` → `file:uploads/` 映射
+
+### 6. 数据库表创建
+
+- **问题**：`docs/content_tables.sql` 已创建，但尚未执行
+- **需要**：在 MySQL 中执行 SQL 文件创建 4 张表（destinations、attractions、guides、comments）
