@@ -1,5 +1,6 @@
 package com.ctrip.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -20,6 +21,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>POST /auth/sms/send：2次/分钟/IP</li>
  * </ul>
  */
+@Data
 @ConfigurationProperties(prefix = "app.rate-limit.auth")
 public class RateLimitConfig {
 
@@ -32,27 +34,27 @@ public class RateLimitConfig {
     /** 补充令牌的时间窗口（秒） */
     private int refillDurationSeconds = 60;
 
-    public int getCapacity() {
-        return capacity;
-    }
-
-    public void setCapacity(int capacity) {
-        this.capacity = capacity;
-    }
-
-    public int getRefillTokens() {
-        return refillTokens;
-    }
-
-    public void setRefillTokens(int refillTokens) {
-        this.refillTokens = refillTokens;
-    }
-
-    public int getRefillDurationSeconds() {
-        return refillDurationSeconds;
-    }
-
-    public void setRefillDurationSeconds(int refillDurationSeconds) {
-        this.refillDurationSeconds = refillDurationSeconds;
-    }
+//    public int getCapacity() {
+//        return capacity;
+//    }
+//
+//    public void setCapacity(int capacity) {
+//        this.capacity = capacity;
+//    }
+//
+//    public int getRefillTokens() {
+//        return refillTokens;
+//    }
+//
+//    public void setRefillTokens(int refillTokens) {
+//        this.refillTokens = refillTokens;
+//    }
+//
+//    public int getRefillDurationSeconds() {
+//        return refillDurationSeconds;
+//    }
+//
+//    public void setRefillDurationSeconds(int refillDurationSeconds) {
+//        this.refillDurationSeconds = refillDurationSeconds;
+//    }
 }

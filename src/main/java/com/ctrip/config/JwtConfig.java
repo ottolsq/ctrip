@@ -1,5 +1,6 @@
 package com.ctrip.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link Component} 使 Spring 可以将此 bean 注入到需要的地方（如 {@code JwtServiceImpl}）。
  */
+@Data
 @Component
 @ConfigurationProperties(prefix = "app.jwt")
 public class JwtConfig {
@@ -41,35 +43,35 @@ public class JwtConfig {
     // ── Getters / Setters ────────────────────────────────────────────────────
     // Spring Boot @ConfigurationProperties 通过 setter 绑定，不能省略。
 
-    public String getSecret() {
-        return secret;
-    }
-
-    public void setSecret(String secret) {
-        this.secret = secret;
-    }
-
-    public long getAccessTokenExpirationMs() {
-        return accessTokenExpirationMs;
-    }
-
-    public void setAccessTokenExpirationMs(long accessTokenExpirationMs) {
-        this.accessTokenExpirationMs = accessTokenExpirationMs;
-    }
-
-    public long getRefreshTokenExpirationMs() {
-        return refreshTokenExpirationMs;
-    }
-
-    public void setRefreshTokenExpirationMs(long refreshTokenExpirationMs) {
-        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
-    }
-
-    public String getIssuer() {
-        return issuer;
-    }
-
-    public void setIssuer(String issuer) {
-        this.issuer = issuer;
-    }
+//    public String getSecret() {
+//        return secret;
+//    }
+//
+//    public void setSecret(String secret) {
+//        this.secret = secret;
+//    }
+//
+//    public long getAccessTokenExpirationMs() {
+//        return accessTokenExpirationMs;
+//    }
+//
+//    public void setAccessTokenExpirationMs(long accessTokenExpirationMs) {
+//        this.accessTokenExpirationMs = accessTokenExpirationMs;
+//    }
+//
+//    public long getRefreshTokenExpirationMs() {
+//        return refreshTokenExpirationMs;
+//    }
+//
+//    public void setRefreshTokenExpirationMs(long refreshTokenExpirationMs) {
+//        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
+//    }
+//
+//    public String getIssuer() {
+//        return issuer;
+//    }
+//
+//    public void setIssuer(String issuer) {
+//        this.issuer = issuer;
+//    }
 }
