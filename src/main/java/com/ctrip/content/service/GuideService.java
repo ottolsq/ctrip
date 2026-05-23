@@ -66,18 +66,19 @@ public interface GuideService {
 
     /**
      * 点赞攻略（需 JWT 认证）。
-     * MVP 阶段不做用户粒度去重。
      *
-     * @param id 攻略 ID
+     * @param id     攻略 ID
+     * @param userId 点赞用户 ID
      * @throws com.ctrip.common.exception.ResourceNotFoundException 攻略不存在时
      */
-    void likeGuide(Long id);
+    void likeGuide(Long id, Long userId);
 
     /**
      * 取消点赞（需 JWT 认证）。
      *
-     * @param id 攻略 ID
+     * @param id     攻略 ID
+     * @param userId 取消点赞用户 ID
      * @throws com.ctrip.common.exception.ResourceNotFoundException 攻略不存在时
      */
-    void unlikeGuide(Long id);
+    void unlikeGuide(Long id, Long userId);
 }

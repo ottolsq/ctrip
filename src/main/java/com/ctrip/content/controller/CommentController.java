@@ -51,7 +51,7 @@ public class CommentController {
     /**
      * 删除评论（需 JWT 认证，仅评论作者）。
      */
-    @DeleteMapping("/api/v1/comments/{commentId}")
+    @DeleteMapping("/{commentId}")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long commentId,
             @AuthenticationPrincipal Long userId) {

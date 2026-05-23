@@ -12,6 +12,9 @@ import com.ctrip.content.entity.enums.GuideStatus;
 import com.ctrip.content.mapper.CommentMapper;
 import com.ctrip.content.mapper.GuideMapper;
 import com.ctrip.content.service.CommentService;
+import com.ctrip.user.entity.User;
+import com.ctrip.user.entity.enums.UserRole;
+import com.ctrip.user.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +28,12 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentMapper commentMapper;
     private final GuideMapper guideMapper;
+    private final UserMapper userMapper;
 
-    public CommentServiceImpl(CommentMapper commentMapper, GuideMapper guideMapper) {
+    public CommentServiceImpl(CommentMapper commentMapper, GuideMapper guideMapper, UserMapper userMapper) {
         this.commentMapper = commentMapper;
         this.guideMapper = guideMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -73,11 +78,12 @@ public class CommentServiceImpl implements CommentService {
         Comment comment = requireComment(commentId);
         checkCommentOwner(comment, userId);
 
-        // 级联删除：删除该评论及其所有子评论
+        // 级联删除：收集该评论及其所有子孙评论 ID，一次性删除
+        List<Long> idsToDelete = new java.util.ArrayList<>(collectDescendants(commentId));
+        idsToDelete.add(commentId);
+
         commentMapper.delete(new LambdaQueryWrapper<Comment>()
-                .eq(Comment::getId, commentId)
-                .or()
-                .eq(Comment::getParentId, commentId));
+                .in(Comment::getId, idsToDelete));
     }
 
     // --- 私有辅助 ---
@@ -98,11 +104,33 @@ public class CommentServiceImpl implements CommentService {
     }
 
     /**
-     * 校验操作权限：仅评论作者本人可操作。
+     * 校验操作权限：评论作者或 ADMIN 可操作。
      */
     private void checkCommentOwner(Comment comment, Long userId) {
-        if (!comment.getUserId().equals(userId)) {
+        if (comment.getUserId().equals(userId)) {
+            return;
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getRole() != UserRole.ADMIN) {
             throw new AuthenticationException("无权操作他人评论");
         }
+    }
+
+    /**
+     * 递归收集指定评论的所有子孙评论 ID。
+     */
+    private List<Long> collectDescendants(Long parentId) {
+        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Comment::getParentId, parentId)
+                .select(Comment::getId);
+        List<Comment> children = commentMapper.selectList(wrapper);
+        if (children.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = children.stream().map(Comment::getId).collect(java.util.stream.Collectors.toList());
+        for (Long childId : ids) {
+            ids.addAll(collectDescendants(childId));
+        }
+        return ids;
     }
 }

@@ -9,6 +9,7 @@ CREATE TABLE users (
     birthday        DATE            DEFAULT NULL,
     real_name       VARCHAR(50)     DEFAULT NULL  COMMENT '实名认证姓名',
     status          TINYINT         NOT NULL  DEFAULT 0  COMMENT '0=UNVERIFIED 1=ACTIVE 2=SUSPENDED 3=DELETED',
+    role            TINYINT         NOT NULL  DEFAULT 0  COMMENT '0=USER 1=ADMIN 2=CONTENT_OPERATOR',
     email_verified  TINYINT(1)      NOT NULL  DEFAULT 0,
     phone_verified  TINYINT(1)      NOT NULL  DEFAULT 0,
     last_login_at   DATETIME        DEFAULT NULL,

@@ -32,10 +32,11 @@ public class AttractionController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<AttractionResponse>>> list(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) Long destinationId,
             @RequestParam(required = false) String keyword) {
-        Page<AttractionResponse> result = attractionService.listAttractions(page, limit, destinationId, keyword);
+        int effectiveLimit = Math.min(limit, 100);
+        Page<AttractionResponse> result = attractionService.listAttractions(page, effectiveLimit, destinationId, keyword);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -46,36 +47,5 @@ public class AttractionController {
     public ResponseEntity<ApiResponse<AttractionResponse>> getDetail(@PathVariable Long id) {
         AttractionResponse result = attractionService.getDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(result));
-    }
-
-    // ==================== 管理端接口 ====================
-
-    /**
-     * 管理端：创建景点。
-     */
-    @PostMapping("/api/v1/admin/attractions")
-    public ResponseEntity<ApiResponse<AttractionResponse>> create(@Valid @RequestBody CreateAttractionRequest request) {
-        AttractionResponse result = attractionService.createAttraction(request);
-        return ResponseEntity.ok(ApiResponse.ok(result));
-    }
-
-    /**
-     * 管理端：更新景点。
-     */
-    @PutMapping("/api/v1/admin/attractions/{id}")
-    public ResponseEntity<ApiResponse<Void>> update(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateAttractionRequest request) {
-        attractionService.updateAttraction(id, request);
-        return ResponseEntity.ok(ApiResponse.ok(null));
-    }
-
-    /**
-     * 管理端：删除景点。
-     */
-    @DeleteMapping("/api/v1/admin/attractions/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        attractionService.deleteAttraction(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

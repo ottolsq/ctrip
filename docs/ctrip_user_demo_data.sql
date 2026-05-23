@@ -4,6 +4,8 @@
 -- ----------------------------
 -- 1. users 表（5条测试数据）
 -- ----------------------------
+
+-- 没有角色
 INSERT INTO users (
     username, email, phone, password_hash, avatar_url,
     gender, birthday, real_name, status,

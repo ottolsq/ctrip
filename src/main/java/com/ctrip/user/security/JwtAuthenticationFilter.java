@@ -18,7 +18,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 /**
  * JWT 认证过滤器，在每次请求时从 {@code Authorization} 请求头提取并验证 access token。
@@ -73,13 +75,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             Long userId = jwtService.extractUserId(token);
+            String role = jwtService.extractUserRole(token);
 
             // 仅在 SecurityContext 未设置认证时写入，防止覆盖已有认证信息
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                        userId,                   // principal = Long userId
-                        null,                     // credentials（无状态 API 不需要保留）
-                        Collections.emptyList()   // authorities（暂无角色体系）
+                        userId,                                                    // principal = Long userId
+                        null,                                                      // credentials（无状态 API 不需要保留）
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role))       // authorities
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }

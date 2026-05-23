@@ -108,6 +108,7 @@ class JwtAuthenticationFilterTest {
     void validToken_shouldSetSecurityContextAndContinueFilterChain() throws ServletException, IOException {
         request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "valid.jwt.token");
         when(jwtService.extractUserId("valid.jwt.token")).thenReturn(42L);
+        when(jwtService.extractUserRole("valid.jwt.token")).thenReturn("USER");
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -120,7 +121,10 @@ class JwtAuthenticationFilterTest {
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isEqualTo(42L);
         assertThat(auth.getCredentials()).isNull();
-        assertThat(auth.getAuthorities()).isEmpty();
+        assertThat(auth.getAuthorities())
+                .hasSize(1)
+                .extracting("authority")
+                .containsExactly("ROLE_USER");
     }
 
     @Test
@@ -133,6 +137,7 @@ class JwtAuthenticationFilterTest {
 
         request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "another.jwt.token");
         when(jwtService.extractUserId("another.jwt.token")).thenReturn(42L);
+        when(jwtService.extractUserRole("another.jwt.token")).thenReturn("ADMIN");
 
         filter.doFilterInternal(request, response, filterChain);
 

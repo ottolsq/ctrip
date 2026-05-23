@@ -32,11 +32,12 @@ public class DestinationController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<DestinationResponse>>> list(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) String province,
             @RequestParam(required = false) String keyword) {
-        Page<DestinationResponse> result = destinationService.listDestinations(page, limit, country, province, keyword);
+        int effectiveLimit = Math.min(limit, 100);
+        Page<DestinationResponse> result = destinationService.listDestinations(page, effectiveLimit, country, province, keyword);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -47,36 +48,5 @@ public class DestinationController {
     public ResponseEntity<ApiResponse<DestinationResponse>> getDetail(@PathVariable Long id) {
         DestinationResponse result = destinationService.getDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(result));
-    }
-
-    // ==================== 管理端接口 ====================
-
-    /**
-     * 管理端：创建目的地。
-     */
-    @PostMapping("/api/v1/admin/destinations")
-    public ResponseEntity<ApiResponse<DestinationResponse>> create(@Valid @RequestBody CreateDestinationRequest request) {
-        DestinationResponse result = destinationService.createDestination(request);
-        return ResponseEntity.ok(ApiResponse.ok(result));
-    }
-
-    /**
-     * 管理端：更新目的地。
-     */
-    @PutMapping("/api/v1/admin/destinations/{id}")
-    public ResponseEntity<ApiResponse<DestinationResponse>> update(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateDestinationRequest request) {
-        DestinationResponse result = destinationService.updateDestination(id, request);
-        return ResponseEntity.ok(ApiResponse.ok(result));
-    }
-
-    /**
-     * 管理端：删除目的地。
-     */
-    @DeleteMapping("/api/v1/admin/destinations/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        destinationService.deleteDestination(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

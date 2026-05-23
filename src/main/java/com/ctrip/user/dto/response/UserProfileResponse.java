@@ -20,5 +20,6 @@ public record UserProfileResponse(
         boolean emailVerified,
         boolean phoneVerified,
         String status,
+        String role,
         LocalDateTime createdAt
 ) {}

@@ -3,6 +3,7 @@ package com.ctrip.user.service;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.TokenExpiredException;
 import com.ctrip.config.JwtConfig;
+import com.ctrip.user.entity.enums.UserRole;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -65,11 +66,12 @@ public class JwtServiceImpl implements JwtService {
      * <p>生成的 token 格式：{@code <Base64Header>.<Base64Payload>.<Signature>}
      */
     @Override
-    public String generateAccessToken(Long userId) {
+    public String generateAccessToken(Long userId, UserRole role) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .subject(String.valueOf(userId))          // sub = userId
                 .issuer(jwtConfig.getIssuer())            // iss = "ctrip"
+                .claim("role", role.name())               // role = "USER"/"ADMIN"/"CONTENT_OPERATOR"
                 .issuedAt(new Date(now))                  // iat
                 .expiration(new Date(now + jwtConfig.getAccessTokenExpirationMs())) // exp
                 .signWith(secretKey)                      // HS256
@@ -86,6 +88,13 @@ public class JwtServiceImpl implements JwtService {
     public Long extractUserId(String token) {
         Claims claims = parseClaims(token);
         return Long.parseLong(claims.getSubject());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String extractUserRole(String token) {
+        Claims claims = parseClaims(token);
+        return claims.get("role", String.class);
     }
 
     /**

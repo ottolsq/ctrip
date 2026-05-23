@@ -37,6 +37,7 @@ public class UserConverter {
                 Boolean.TRUE.equals(user.getEmailVerified()),
                 Boolean.TRUE.equals(user.getPhoneVerified()),
                 user.getStatus() != null ? user.getStatus().name() : null,
+                user.getRole() != null ? user.getRole().name() : null,
                 user.getCreatedAt()
         );
     }

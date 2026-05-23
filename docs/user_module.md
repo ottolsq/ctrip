@@ -240,6 +240,7 @@
 | birthday | LocalDate | 生日 |
 | realName | String | 实名认证姓名 |
 | status | UserStatus | 用户状态（见下方） |
+| role | UserRole | 用户角色（见下方） |
 | emailVerified | Boolean | 邮箱是否验证 |
 | phoneVerified | Boolean | 手机是否验证 |
 | lastLoginAt | LocalDateTime | 最后登录时间 |
@@ -262,6 +263,23 @@
 | UNSPECIFIED | 0 | 用户未填写 |
 | MALE | 1 | 男性 |
 | FEMALE | 2 | 女性 |
+
+**用户角色枚举（UserRole）：**
+
+| 角色 | 值 | 说明 |
+|------|-----|------|
+| USER | 0 | 普通用户，默认角色 |
+| ADMIN | 1 | 管理员，拥有所有管理权限 |
+| CONTENT_OPERATOR | 2 | 内容运维，可审核内容、管理目的地/景点 |
+
+**角色权限路由：**
+- `/api/v1/admin/**` — ADMIN 或 CONTENT_OPERATOR
+- 其他认证接口 — 所有已认证用户（USER/ADMIN/CONTENT_OPERATOR）
+
+**JWT 角色：**
+- 登录/注册时角色写入 JWT `"role"` claim
+- `JwtAuthenticationFilter` 读取并授予 `ROLE_XXX` 权限
+- Refresh Token 轮换时从 DB 读取最新角色
 
 ---
 
@@ -337,7 +355,7 @@
 **Access Token：**
 - JWT格式，HS256算法签名
 - 15分钟有效期
-- 包含 claims：sub(userId)、iss("ctrip")、exp(过期时间)
+- 包含 claims：sub(userId)、iss("ctrip")、role(角色名)、exp(过期时间)
 
 **Refresh Token：**
 - 服务端存储 SHA-256 哈希，不存原始值
@@ -379,7 +397,7 @@
 1. 检查 Authorization 请求头
 2. 无 Bearer token → 跳过（白名单请求走此分支）
 3. 提取并验证 JWT：
-	- 有效 → 将 userId 写入 SecurityContext，继续过滤链
+	- 有效 → 提取 userId 和 role，将 userId 写入 SecurityContext 并授予 ROLE_XXX 权限，继续过滤链
 	- 过期 → 返回 401（客户端应使用 refresh token 续期）
 	- 无效 → 返回 401
 

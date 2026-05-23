@@ -3,6 +3,7 @@ package com.ctrip.user.service;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.TokenExpiredException;
 import com.ctrip.config.JwtConfig;
+import com.ctrip.user.entity.enums.UserRole;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +44,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateAccessToken：返回三段式 JWT 字符串")
     void generateAccessToken_shouldReturnValidJwtFormat() {
-        String token = jwtService.generateAccessToken(42L);
+        String token = jwtService.generateAccessToken(42L, UserRole.USER);
 
         assertThat(token).isNotBlank();
         assertThat(token.split("\\.")).hasSize(3); // Header.Payload.Signature
@@ -52,8 +53,8 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("generateAccessToken：不同 userId 生成不同 token")
     void generateAccessToken_differentUserIds_shouldProduceDifferentTokens() {
-        String token1 = jwtService.generateAccessToken(1L);
-        String token2 = jwtService.generateAccessToken(2L);
+        String token1 = jwtService.generateAccessToken(1L, UserRole.USER);
+        String token2 = jwtService.generateAccessToken(2L, UserRole.USER);
 
         assertThat(token1).isNotEqualTo(token2);
     }
@@ -64,7 +65,7 @@ class JwtServiceImplTest {
     @DisplayName("extractUserId：从有效 token 正确解析 userId")
     void extractUserId_validToken_shouldReturnCorrectUserId() {
         Long userId = 99L;
-        String token = jwtService.generateAccessToken(userId);
+        String token = jwtService.generateAccessToken(userId, UserRole.USER);
 
         assertThat(jwtService.extractUserId(token)).isEqualTo(userId);
     }
@@ -77,7 +78,7 @@ class JwtServiceImplTest {
         cfg.setSecret(TEST_SECRET);
         cfg.setAccessTokenExpirationMs(-60_000L);
         cfg.setIssuer(ISSUER);
-        String expiredToken = new JwtServiceImpl(cfg).generateAccessToken(1L);
+        String expiredToken = new JwtServiceImpl(cfg).generateAccessToken(1L, UserRole.USER);
 
         assertThatThrownBy(() -> jwtService.extractUserId(expiredToken))
                 .isInstanceOf(TokenExpiredException.class)
@@ -87,7 +88,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("extractUserId：签名末尾被篡改 → 抛出 AuthenticationException")
     void extractUserId_tamperedToken_shouldThrowAuthenticationException() {
-        String token = jwtService.generateAccessToken(1L);
+        String token = jwtService.generateAccessToken(1L, UserRole.USER);
         String tampered = token.substring(0, token.length() - 4) + "XXXX";
 
         assertThatThrownBy(() -> jwtService.extractUserId(tampered))
@@ -108,7 +109,7 @@ class JwtServiceImplTest {
         wrongCfg.setSecret("wrong-secret-key-also-must-be-32-bytes-longXXXX");
         wrongCfg.setAccessTokenExpirationMs(ACCESS_EXPIRATION_MS);
         wrongCfg.setIssuer(ISSUER);
-        String tokenFromWrongSecret = new JwtServiceImpl(wrongCfg).generateAccessToken(1L);
+        String tokenFromWrongSecret = new JwtServiceImpl(wrongCfg).generateAccessToken(1L, UserRole.USER);
 
         assertThatThrownBy(() -> jwtService.extractUserId(tokenFromWrongSecret))
                 .isInstanceOf(AuthenticationException.class);
@@ -119,7 +120,7 @@ class JwtServiceImplTest {
     @Test
     @DisplayName("isTokenValid：有效 token → true")
     void isTokenValid_validToken_shouldReturnTrue() {
-        assertThat(jwtService.isTokenValid(jwtService.generateAccessToken(1L))).isTrue();
+        assertThat(jwtService.isTokenValid(jwtService.generateAccessToken(1L, UserRole.USER))).isTrue();
     }
 
     @Test
@@ -129,7 +130,7 @@ class JwtServiceImplTest {
         cfg.setSecret(TEST_SECRET);
         cfg.setAccessTokenExpirationMs(-60_000L);
         cfg.setIssuer(ISSUER);
-        String expiredToken = new JwtServiceImpl(cfg).generateAccessToken(1L);
+        String expiredToken = new JwtServiceImpl(cfg).generateAccessToken(1L, UserRole.USER);
 
         assertThat(jwtService.isTokenValid(expiredToken)).isFalse();
     }

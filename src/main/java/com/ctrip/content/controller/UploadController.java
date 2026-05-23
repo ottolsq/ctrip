@@ -1,15 +1,20 @@
 package com.ctrip.content.controller;
 
+import com.ctrip.common.exception.AuthenticationException;
+import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.response.ApiResponse;
+import com.ctrip.content.dto.response.ImageBatchUploadResponse;
 import com.ctrip.content.dto.response.ImageUploadResponse;
 import com.ctrip.content.service.storage.ImageStorageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * 图片上传控制器。
@@ -40,29 +45,43 @@ public class UploadController {
      * 批量上传图片。
      */
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<ImageUploadResponse[]>> uploadMultiple(
+    public ResponseEntity<ApiResponse<ImageBatchUploadResponse>> uploadMultiple(
             @RequestParam("files") MultipartFile[] files) throws IOException {
-        ImageUploadResponse[] responses = Arrays.stream(files)
+        java.util.List<String> urls = Arrays.stream(files)
                 .map(file -> {
                     try {
-                        String url = imageStorageService.upload(file.getInputStream(), file.getOriginalFilename());
-                        return new ImageUploadResponse(url);
+                        return imageStorageService.upload(file.getInputStream(), file.getOriginalFilename());
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 })
-                .toArray(ImageUploadResponse[]::new);
-        return ResponseEntity.ok(ApiResponse.ok(responses));
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.ok(new ImageBatchUploadResponse(urls)));
     }
 
     /**
-     * 删除图片。
+     * 删除图片（需 JWT 认证）。
      */
-    @DeleteMapping("/{filename:.+}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String filename) {
-        // 构建完整 URL 路径
-        String url = "/uploads/images/" + filename;
+    // todo: 删除上传图片bug
+    @DeleteMapping("/images/{year}/{month}/{day}/{filename:.+}")
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable String year,
+            @PathVariable String month,
+            @PathVariable String day,
+            @PathVariable String filename,
+            @AuthenticationPrincipal Long userId) {
+        validateFilename(filename);
+        String url = "/uploads/images/" + year + "/" + month + "/" + day + "/" + filename;
         imageStorageService.delete(url);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    /**
+     * 校验文件名安全：禁止路径穿越（../ 等）。
+     */
+    private void validateFilename(String filename) {
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            throw new AuthenticationException("非法文件名");
+        }
     }
 }

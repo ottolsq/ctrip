@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.ctrip.user.entity.enums.Gender;
+import com.ctrip.user.entity.enums.UserRole;
 import com.ctrip.user.entity.enums.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -55,6 +56,8 @@ public class User {
     private String realName;  // 实名认证姓名
 
     private UserStatus status;
+
+    private UserRole role;
 
     private Boolean emailVerified;
 

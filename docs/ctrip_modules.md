@@ -263,7 +263,7 @@
 
 | 表名 | 说明 | 核心字段 |
 |------|------|---------|
-| `users` | 用户主表 | id, username, email, phone, password_hash(BCrypt), avatar_url, gender, birthday, real_name, status(UNVERIFIED/ACTIVE/SUSPENDED/DELETED), email_verified, phone_verified, last_login_at, created_at, updated_at |
+| `users` | 用户主表 | id, username, email, phone, password_hash(BCrypt), avatar_url, gender, birthday, real_name, status(UNVERIFIED/ACTIVE/SUSPENDED/DELETED), role(USER/ADMIN/CONTENT_OPERATOR), email_verified, phone_verified, last_login_at, created_at, updated_at |
 | `refresh_tokens` | 刷新令牌表（Token轮换） | id, user_id(FK→CASCADE), token_hash(SHA-256), device_info, issued_at, expires_at, revoked, revoked_at |
 | `password_reset_tokens` | 密码重置OTP表 | id, user_id(FK→CASCADE), token_hash(SHA-256), channel(EMAIL/SMS), expires_at, used |
 
@@ -272,6 +272,7 @@
 - Refresh Token 只存 SHA-256 哈希，不存原始值，支持 Token 轮换防重放
 - 密码重置 OTP 同样哈希存储，一次性使用，10分钟有效期
 - 登录时先检查账号状态再验证密码，防枚举攻击
+- 角色体系：单角色字段（USER/ADMIN/CONTENT_OPERATOR），注册默认 USER；角色写入 JWT claim，过滤器读取并授予 Spring Security 权限；`/api/v1/admin/**` 路径需 ADMIN 或 CONTENT_OPERATOR 角色
 
 #### 内容模块（待实现）
 
@@ -402,6 +403,7 @@
 | L-2 | `refresh_tokens` 中已吊销/过期的 token 不自动清理 | DB 表持续增长 | 定时任务清理 `revoked=true` 或 `expires_at < NOW()` 的记录 |
 | L-3 | `ChangePasswordRequest` 无旧密码强度 / 新旧密码相同校验 | 用户可将密码改为与旧密码相同的值而无感知 | 在 `UserServiceImpl.changePassword` 中加相等性检查 |
 | L-4 | `UserConverter` 将 `UserStatus` 枚举直接 `.name()` 暴露给前端，枚举重命名会破坏 API 协议 | 接口不稳定 | 定义固定的字符串常量映射，与枚举内部名解耦 |
+| L-5 | Refresh Token 轮换后，旧的 Access Token（JWT）仍然有效，直到自然过期（默认 15 分钟） | Access Token 泄露或用户 Logout 后，15 分钟窗口期内仍可访问 API | 见下方方案分析，暂不改 |
 
 ---
 
@@ -416,30 +418,26 @@
 - **涉及文件**：`SecurityConfig.java`、`JwtAuthenticationFilter.java`
 - **同时**：需确认 JWT 过滤器覆盖 content 模块的所有路径
 
-#### 管理员角色方案设计决策（2026-05-19）
+#### 管理员角色方案 — 已实现（2026-05-19 更新）
 
-当前 `ctrip_user` 表无 `role` 字段，JWT token 只包含 `userId`。两种方案对比：
+用户表已增加 `role` 字段（TINYINT），采用单角色字段方案：
 
-**方案 A：配置文件指定 admin userId 列表**（当前采用）
-- 在 `application.properties` 新增 `app.admin-ids=1,2`，登录时判断 userId 是否在此列表中
-- **好处**：零数据库改动、配置简单、适合早期独立开发阶段
-- **坏处**：
-  - 每次新增管理员需改配置 + 重启，无法运行时动态切换
-  - 只有"是/不是 admin"二元判断，后续如需运营/审核员等多角色体系则不适用
-  - userId 硬绑定，自增 ID 下需先注册再查 ID 再填配置
-- **适用**：当前阶段完全够用，管理员数量极少（1-2 人）
+| 角色 | 值 | 权限 |
+|------|-----|------|
+| USER | 0 | 普通用户：发布攻略、评论、收藏、行程、盲盒 |
+| ADMIN | 1 | 管理员：所有 `/api/v1/admin/**` + 内容审核 |
+| CONTENT_OPERATOR | 2 | 内容运维：攻略审核、评论管理、目的地/景点 CRUD |
 
-**方案 B：user 表增加 role 字段**
-- 在 `ctrip_user` 表加 `role` 字段（`VARCHAR`），登录时查库写入 JWT claims
-- **好处**：支持多角色、运行时可通过管理后台变更、可扩展性强
-- **坏处**：需要改数据库 + 实体 + JWTService + JwtFilter，改动面较广
-- **适用**：角色变复杂后再迁移，改动面窄（只影响 JwtFilter 和 SecurityConfig）
-
-**决策**：当前用方案 A。后续角色需求变复杂时，加 `role` 字段重构成本很低。
-
-
+**实现要点：**
+- JWT token 中携带 `"role"` claim（如 `"role":"ADMIN"`）
+- `JwtAuthenticationFilter` 读取 role 并授予 `ROLE_XXX` 权限
+- `SecurityConfig` 配置 `/api/v1/admin/**` 需 ADMIN 或 CONTENT_OPERATOR
+- 注册时默认角色为 USER，refreshToken 时从 DB 读取最新 role 写入新 JWT
+- 手动执行 `ALTER TABLE users ADD COLUMN role TINYINT NOT NULL DEFAULT 0` 迁移已有数据
 
 ==需要对 user 进行重构，需要有多种角色，管理员、用户、内容运维人员，需要进一步分析==
+
+
 
 
 
@@ -464,3 +462,35 @@
 
 - **问题**：`docs/content_tables.sql` 已创建，但尚未执行
 - **需要**：在 MySQL 中执行 SQL 文件创建 4 张表（destinations、attractions、guides、comments）
+
+### 7. JWT Access Token 吊销机制讨论（L-5 详细说明）
+
+**问题背景**：
+
+系统采用双令牌设计（Access Token + Refresh Token），职责分离：
+
+- **Access Token（JWT，短期 15 分钟）**：用于每次 API 请求的身份验证。无状态，服务端不查数据库，仅验证签名和过期时间。
+- **Refresh Token（长期 30 天）**：仅在 Access Token 过期时用来换取新的 Access Token。有状态，存数据库，支持吊销。
+
+正常刷新流程：客户端调 `/api/v1/auth/refresh` → 吊销旧 Refresh Token → 生成新的 Access Token + 新的 Refresh Token。
+
+**但旧 Access Token 仍然有效**，因为 JWT 是无状态的，`JwtAuthenticationFilter` 只验证签名和过期时间，不查数据库。
+
+**触发 refresh 接口的场景**：
+- 前端收到 HTTP 401（Access Token 过期）时自动调用
+- 前端预判 Token 快过期时主动调用
+
+**多 Access Token 同时存在的原因**：
+- 多设备登录（手机和电脑各有 token）
+- 多窗口同时触发 refresh
+- 正常场景下无害，但带来安全窗口期
+
+**三种解决方案**：
+
+| 方案 | 原理 | 优点 | 缺点 |
+|------|------|------|------|
+| A. Token 版本号 | User 表加 `tokenVersion` 字段，每次刷新 +1，JWT 携带版本号，过滤器比对数据库版本 | 改动小，性能好 | 每次请求多一次数据库查询 |
+| B. 缩短 Access Token 过期时间 | 改为 5-10 分钟，旧 token 快速自然过期 | 零改动 | 不是真正的吊销，刷新更频繁 |
+| C. Redis 黑名单 | 刷新/登出时将旧 token jti 加入 Redis 黑名单 | 真正的实时吊销 | 引入 Redis 依赖 |
+
+**当前决策**：暂不修改。15 分钟安全窗口对 MVP 阶段可接受，MVP 之后再根据安全需求选择方案。

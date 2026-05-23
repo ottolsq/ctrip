@@ -74,7 +74,18 @@ public class LocalStorageServiceImpl implements ImageStorageService {
     public void delete(String url) {
         // 从 URL 提取相对路径
         String relativePath = url.replace(baseUrl + "/", "");
-        Path filePath = Path.of(uploadDir, relativePath);
+
+        // 防御：校验路径穿越（即使调用方已校验，服务层仍需防御）
+        if (relativePath.contains("..")) {
+            throw new BusinessException("非法路径");
+        }
+
+        Path filePath = Path.of(uploadDir, relativePath).normalize();
+
+        // 确保文件路径在上传目录内
+        if (!filePath.startsWith(Path.of(uploadDir).toAbsolutePath().normalize())) {
+            throw new BusinessException("非法路径");
+        }
 
         try {
             Files.deleteIfExists(filePath);

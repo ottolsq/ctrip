@@ -79,9 +79,10 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
 
-            // 路由授权：认证端点公开，其余需要 JWT
+            // 路由授权：认证端点公开，管理端需要 ADMIN 或 CONTENT_OPERATOR 角色，其余需要 JWT
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "CONTENT_OPERATOR")
                 .anyRequest().authenticated()
             )
 
@@ -95,7 +96,7 @@ public class SecurityConfig {
                     response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error("请先登录")));
                 })
                 .accessDeniedHandler((request, response, e) -> {
-                    // 已认证但权限不足（当前系统暂无角色体系，此分支基本不触发）
+                    // 已认证但权限不足（用户角色不满足 /api/v1/admin/** 要求）
                     response.setStatus(HttpStatus.FORBIDDEN.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");

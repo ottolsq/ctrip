@@ -11,6 +11,7 @@ import com.ctrip.user.dto.response.TokenResponse;
 import com.ctrip.user.entity.PasswordResetToken;
 import com.ctrip.user.entity.RefreshToken;
 import com.ctrip.user.entity.User;
+import com.ctrip.user.entity.enums.UserRole;
 import com.ctrip.user.entity.enums.UserStatus;
 import com.ctrip.user.mapper.PasswordResetTokenMapper;
 import com.ctrip.user.mapper.RefreshTokenMapper;
@@ -96,6 +97,7 @@ public class AuthServiceImpl implements AuthService {
                 .phone(request.phone())
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .status(UserStatus.ACTIVE)
+                .role(UserRole.USER)
                 .phoneVerified(true)
                 .emailVerified(false)
                 .build();
@@ -122,6 +124,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(request.email())
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .status(UserStatus.UNVERIFIED)
+                .role(UserRole.USER)
                 .emailVerified(false)
                 .phoneVerified(false)
                 .build();
@@ -188,6 +191,10 @@ public class AuthServiceImpl implements AuthService {
         User user = userMapper.selectById(stored.getUserId());
         if (user == null) {
             throw new AuthenticationException("用户不存在");
+        }
+        // 4. 封禁用户禁止刷新 token
+        if (UserStatus.SUSPENDED == user.getStatus()) {
+            throw new BusinessException("账号已被封禁，请联系客服");
         }
         return generateTokenResponse(user);
     }
@@ -307,7 +314,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         refreshTokenMapper.insert(refreshToken);
 
-        String accessToken = jwtService.generateAccessToken(user.getId());
+        String accessToken = jwtService.generateAccessToken(user.getId(), user.getRole());
         long expiresIn = jwtService.getAccessTokenExpiresInSeconds();
 
         return new TokenResponse(accessToken, rawToken, expiresIn, "Bearer");

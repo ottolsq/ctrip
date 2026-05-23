@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * MyBatis Plus 的自动配置未完全激活时 Mapper 接口仍能正确注册为 Spring Bean。
  */
 @SpringBootApplication
-@MapperScan("com.ctrip.user.mapper")
+@MapperScan({"com.ctrip.user.mapper", "com.ctrip.content.mapper"})
 public class CtripApplication {
 
 	public static void main(String[] args) {

@@ -8,6 +8,7 @@ import com.ctrip.content.dto.response.GuideListResponse;
 import com.ctrip.content.dto.response.GuideResponse;
 import com.ctrip.content.service.GuideService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -31,21 +32,24 @@ public class GuideController {
     /**
      * 分页查询攻略列表（公开，仅已发布）。
      */
+    // todo: 这里依然需要jwt
     @GetMapping
     public ResponseEntity<ApiResponse<Page<GuideListResponse>>> list(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) Long destinationId,
             @RequestParam(required = false) Long authorId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "create_time") String sortBy) {
-        Page<GuideListResponse> result = guideService.listGuides(page, limit, destinationId, authorId, keyword, sortBy);
+        int effectiveLimit = Math.min(limit, 100);
+        Page<GuideListResponse> result = guideService.listGuides(page, effectiveLimit, destinationId, authorId, keyword, sortBy);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     /**
      * 获取攻略详情（公开，浏览量 +1）。
      */
+    // todo: 这里依然需要jwt
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<GuideResponse>> getDetail(@PathVariable Long id) {
         GuideResponse result = guideService.getDetail(id);
@@ -60,7 +64,7 @@ public class GuideController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody CreateGuideRequest request) {
         GuideResponse result = guideService.createGuide(userId, request);
-        return ResponseEntity.ok(ApiResponse.ok(result));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
     }
 
     /**
@@ -90,8 +94,9 @@ public class GuideController {
      * 点赞攻略（需 JWT 认证）。
      */
     @PostMapping("/{id}/like")
-    public ResponseEntity<ApiResponse<Void>> like(@PathVariable Long id) {
-        guideService.likeGuide(id);
+    public ResponseEntity<ApiResponse<Void>> like(@PathVariable Long id,
+                                                   @AuthenticationPrincipal Long userId) {
+        guideService.likeGuide(id, userId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
@@ -99,8 +104,9 @@ public class GuideController {
      * 取消点赞（需 JWT 认证）。
      */
     @DeleteMapping("/{id}/like")
-    public ResponseEntity<ApiResponse<Void>> unlike(@PathVariable Long id) {
-        guideService.unlikeGuide(id);
+    public ResponseEntity<ApiResponse<Void>> unlike(@PathVariable Long id,
+                                                     @AuthenticationPrincipal Long userId) {
+        guideService.unlikeGuide(id, userId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

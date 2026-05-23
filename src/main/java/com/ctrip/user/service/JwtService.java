@@ -23,9 +23,20 @@ public interface JwtService {
      * 为指定用户生成 access token。
      *
      * @param userId 用户 ID，将作为 JWT {@code sub} 字段写入
+     * @param role 用户角色，将作为 JWT {@code role} claim 写入
      * @return 签名后的 JWT 字符串（Header.Payload.Signature 格式）
      */
-    String generateAccessToken(Long userId);
+    String generateAccessToken(Long userId, com.ctrip.user.entity.enums.UserRole role);
+
+    /**
+     * 从 token 中提取用户角色。
+     *
+     * @param token JWT 字符串（不含 "Bearer " 前缀）
+     * @return token 中的角色名（如 "USER"、"ADMIN"）
+     * @throws com.ctrip.common.exception.TokenExpiredException   token 已过期
+     * @throws com.ctrip.common.exception.AuthenticationException token 签名无效或格式错误
+     */
+    String extractUserRole(String token);
 
     /**
      * 验证 token 合法性并提取 userId。

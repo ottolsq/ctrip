@@ -549,6 +549,7 @@ curl -X GET "http://localhost:8080/api/v1/users/me" \
     "emailVerified": false,
     "phoneVerified": true,
     "status": "ACTIVE",
+    "role": "USER",
     "createdAt": "2024-01-01T10:30:00"
   },
   "error": null
@@ -570,6 +571,7 @@ curl -X GET "http://localhost:8080/api/v1/users/me" \
 | emailVerified | boolean | 邮箱是否已验证 |
 | phoneVerified | boolean | 手机是否已验证 |
 | status | string | 账号状态：`UNVERIFIED` / `ACTIVE` / `SUSPENDED` / `DELETED` |
+| role | string | 用户角色：`USER` / `ADMIN` / `CONTENT_OPERATOR` |
 | createdAt | string | 注册时间，ISO 8601 格式 |
 
 #### 失败响应
@@ -641,6 +643,7 @@ curl -X PUT "http://localhost:8080/api/v1/users/me" \
     "emailVerified": false,
     "phoneVerified": true,
     "status": "ACTIVE",
+    "role": "USER",
     "createdAt": "2024-01-01T10:30:00"
   },
   "error": null
@@ -781,6 +784,7 @@ curl -X PUT "http://localhost:8080/api/v1/users/me/avatar" \
     "emailVerified": false,
     "phoneVerified": true,
     "status": "ACTIVE",
+    "role": "USER",
     "createdAt": "2024-01-01T10:30:00"
   },
   "error": null
@@ -818,6 +822,16 @@ curl -X PUT "http://localhost:8080/api/v1/users/me/avatar" \
 | ACTIVE | 正常 |
 | SUSPENDED | 已封禁 |
 | DELETED | 已注销 |
+
+### 角色枚举值
+
+| 值 | 说明 | 权限 |
+|----|------|------|
+| USER | 普通用户（默认角色） | 发布攻略、评论、收藏、行程、盲盒 |
+| ADMIN | 管理员 | 所有管理端接口 + 内容审核 |
+| CONTENT_OPERATOR | 内容运维 | 攻略审核、评论管理、目的地/景点 CRUD |
+
+**说明**：角色信息通过 JWT token 中的 `role` claim 传递，用于接口权限校验。访问 `/api/v1/admin/**` 等管理端接口需要 ADMIN 或 CONTENT_OPERATOR 角色，否则返回 403。
 
 ### 限流配置汇总
 

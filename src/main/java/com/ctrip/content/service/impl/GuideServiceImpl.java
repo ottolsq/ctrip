@@ -126,7 +126,7 @@ public class GuideServiceImpl implements GuideService {
 
     @Override
     @Transactional
-    public void likeGuide(Long id) {
+    public void likeGuide(Long id, Long userId) {
         requirePublishedGuide(id);
         guideMapper.update(null, new LambdaUpdateWrapper<Guide>()
                 .eq(Guide::getId, id)
@@ -135,7 +135,7 @@ public class GuideServiceImpl implements GuideService {
 
     @Override
     @Transactional
-    public void unlikeGuide(Long id) {
+    public void unlikeGuide(Long id, Long userId) {
         requirePublishedGuide(id);
         // 确保不低于 0
         guideMapper.update(null, new LambdaUpdateWrapper<Guide>()
