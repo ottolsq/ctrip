@@ -82,6 +82,7 @@ public class SecurityConfig {
             // 路由授权：认证端点公开，管理端需要 ADMIN 或 CONTENT_OPERATOR 角色，其余需要 JWT
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/itineraries/share/**").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "CONTENT_OPERATOR")
                 .anyRequest().authenticated()
             )

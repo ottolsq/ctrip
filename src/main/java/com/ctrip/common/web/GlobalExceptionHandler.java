@@ -3,6 +3,7 @@ package com.ctrip.common.web;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.DuplicateResourceException;
+import com.ctrip.common.exception.ForbiddenException;
 import com.ctrip.common.exception.ResourceNotFoundException;
 import com.ctrip.common.exception.TokenExpiredException;
 import com.ctrip.common.response.ApiResponse;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
  * ResourceNotFoundException    → 404 Not Found
  * AuthenticationException      → 401 Unauthorized  (凭据无效)
  * TokenExpiredException        → 401 Unauthorized  (token 过期，客户端应尝试刷新)
+ * ForbiddenException           → 403 Forbidden     (权限不足)
  * DuplicateResourceException   → 409 Conflict      (唯一性冲突，如邮箱已注册)
  * BusinessException            → 400 Bad Request   (业务规则违反)
  * MethodArgumentNotValidException → 400 Bad Request (Bean Validation 失败)
@@ -74,6 +76,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TokenExpiredException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleTokenExpired(TokenExpiredException ex) {
+        return ApiResponse.error(ex.getMessage());
+    }
+
+    /** 权限不足：403。 */
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleForbidden(ForbiddenException ex) {
+        return ApiResponse.error(ex.getMessage());
+    }
+
+    /** 参数非法：400（日期校验、枚举非法值等）。 */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException ex) {
         return ApiResponse.error(ex.getMessage());
     }
 
