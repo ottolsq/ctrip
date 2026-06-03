@@ -1,0 +1,434 @@
+package com.ctrip.blindbox.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ctrip.blindbox.converter.OrderConverter;
+import com.ctrip.blindbox.converter.ResultConverter;
+import com.ctrip.blindbox.dto.CreateOrderRequest;
+import com.ctrip.blindbox.dto.OrderResponse;
+import com.ctrip.blindbox.dto.SchemeResponse;
+import com.ctrip.blindbox.entity.BlindBoxOrder;
+import com.ctrip.blindbox.entity.BlindBoxPreference;
+import com.ctrip.blindbox.entity.BlindBoxResult;
+import com.ctrip.blindbox.entity.BlindBoxTemplate;
+import com.ctrip.blindbox.entity.enums.BlindBoxType;
+import com.ctrip.blindbox.entity.enums.OrderStatus;
+import com.ctrip.blindbox.entity.enums.TemplateStatus;
+import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
+import com.ctrip.blindbox.mapper.BlindBoxPreferenceMapper;
+import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
+import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
+import com.ctrip.blindbox.service.BlindBoxOrderService;
+import com.ctrip.blindbox.service.BlindBoxPreferenceService;
+import com.ctrip.blindbox.service.BlindBoxSchemeService;
+import com.ctrip.common.exception.BusinessException;
+import com.ctrip.common.exception.ForbiddenException;
+import com.ctrip.common.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * 盲盒订单服务实现。
+ *
+ * <p>核心业务逻辑：订单创建、支付、取消、开盒、超时扫描。
+ * 限定盲盒使用 Redisson 分布式锁 + MySQL 乐观锁防止超卖。
+ */
+@Service
+public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(BlindBoxOrderServiceImpl.class);
+    private static final DateTimeFormatter ORDER_NO_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    /** 订单号序号计数器（内存级，重启后重置，实际生产应使用 Redis INCR）。 */
+    private final AtomicLong orderSeq = new AtomicLong(0);
+
+    /** 每日的订单号前缀缓存 key → 当前序号起始值。 */
+    private final Map<String, Long> dailySeqBase = new ConcurrentHashMap<>();
+
+    private final BlindBoxOrderMapper orderMapper;
+    private final BlindBoxTemplateMapper templateMapper;
+    private final BlindBoxResultMapper resultMapper;
+    private final BlindBoxPreferenceMapper preferenceMapper;
+    private final BlindBoxPreferenceService preferenceService;
+    private final BlindBoxSchemeService schemeService;
+    private final RedissonClient redissonClient;
+    private final ObjectMapper objectMapper;
+
+    public BlindBoxOrderServiceImpl(BlindBoxOrderMapper orderMapper,
+                                    BlindBoxTemplateMapper templateMapper,
+                                    BlindBoxResultMapper resultMapper,
+                                    BlindBoxPreferenceMapper preferenceMapper,
+                                    BlindBoxPreferenceService preferenceService,
+                                    BlindBoxSchemeService schemeService,
+                                    RedissonClient redissonClient,
+                                    ObjectMapper objectMapper) {
+        this.orderMapper = orderMapper;
+        this.templateMapper = templateMapper;
+        this.resultMapper = resultMapper;
+        this.preferenceMapper = preferenceMapper;
+        this.preferenceService = preferenceService;
+        this.schemeService = schemeService;
+        this.redissonClient = redissonClient;
+        this.objectMapper = objectMapper;
+    }
+
+    // ========== 订单创建 ==========
+
+    @Override
+    @Transactional
+    public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
+        // 1. 验证模板
+        BlindBoxTemplate template = requireTemplate(request.templateId());
+        if (template.getStatus() != TemplateStatus.ACTIVE) {
+            throw new BusinessException("盲盒已下架，无法购买");
+        }
+
+        // 2. 限定盲盒：检查库存 + 分布式锁扣减
+        if (template.getType() == BlindBoxType.LIMITED) {
+            if (template.getStock() == null || template.getStock() <= 0) {
+                throw new BusinessException("库存不足");
+            }
+            decrementStockWithLock(template.getId());
+        }
+
+        // 3. 创建订单
+        String orderNo = generateOrderNo();
+        LocalDateTime now = LocalDateTime.now();
+        BlindBoxOrder order = BlindBoxOrder.builder()
+                .userId(userId)
+                .templateId(template.getId())
+                .orderNo(orderNo)
+                .status(OrderStatus.PENDING)
+                .payAmount(template.getPrice())
+                .expireAt(now.plusMinutes(15))
+                .build();
+        orderMapper.insert(order);
+
+        // 4. 保存预选参数
+        preferenceService.savePreference(
+                order.getId(),
+                request.departureCity(),
+                request.budgetLevel(),
+                request.theme()
+        );
+
+        log.info("创建盲盒订单: orderNo={}, userId={}, templateId={}", orderNo, userId, template.getId());
+        return OrderConverter.toResponse(order, template);
+    }
+
+    // ========== 订单查询 ==========
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderDetail(Long userId, String orderNo) {
+        BlindBoxOrder order = requireOrder(orderNo, userId);
+        BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+        return OrderConverter.toResponse(order, template);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> listMyOrders(Long userId, int page, int limit, String status) {
+        Page<BlindBoxOrder> pageObj = new Page<>(page, limit);
+
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getUserId, userId);
+
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(BlindBoxOrder::getStatus, OrderStatus.valueOf(status));
+        }
+        wrapper.orderByDesc(BlindBoxOrder::getCreatedAt);
+
+        Page<BlindBoxOrder> result = orderMapper.selectPage(pageObj, wrapper);
+
+        Page<OrderResponse> responsePage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
+        responsePage.setRecords(
+                result.getRecords().stream()
+                        .map(order -> {
+                            BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+                            return OrderConverter.toResponse(order, template);
+                        })
+                        .toList()
+        );
+        return responsePage;
+    }
+
+    // ========== 取消订单 ==========
+
+    @Override
+    @Transactional
+    public void cancelOrder(Long userId, String orderNo) {
+        BlindBoxOrder order = requireOrder(orderNo, userId);
+
+        // 仅待支付可取消
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BusinessException("仅待支付订单可取消");
+        }
+
+        // 更新状态
+        orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+                .eq(BlindBoxOrder::getId, order.getId())
+                .set(BlindBoxOrder::getStatus, OrderStatus.CANCELLED));
+
+        // 限定盲盒恢复库存
+        BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+        if (template != null && template.getType() == BlindBoxType.LIMITED) {
+            templateMapper.incrementStock(template.getId());
+            log.info("取消订单恢复库存: orderNo={}, templateId={}", orderNo, template.getId());
+        }
+
+        log.info("取消订单: orderNo={}", orderNo);
+    }
+
+    // ========== 开盒 ==========
+
+    @Override
+    @Transactional
+    public OrderResponse openBox(Long userId, String orderNo) {
+        BlindBoxOrder order = requireOrder(orderNo, userId);
+
+        // 仅已支付可开盒
+        if (order.getStatus() != OrderStatus.PAID) {
+            throw new BusinessException("仅已支付订单可开盒");
+        }
+
+        // 获取分布式锁防止重复开盒
+        String lockKey = "lock:blindbox:open:" + order.getId();
+        RLock lock = redissonClient.getLock(lockKey);
+        try {
+            if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+                throw new BusinessException("系统繁忙，请稍后重试");
+            }
+
+            // 幂等检查：若已开盒，直接返回
+            BlindBoxOrder refreshed = orderMapper.selectById(order.getId());
+            if (refreshed.getStatus() == OrderStatus.OPENED) {
+                log.info("开盒幂等返回: orderNo={}", orderNo);
+                BlindBoxTemplate template = templateMapper.selectById(refreshed.getTemplateId());
+                return OrderConverter.toResponse(refreshed, template);
+            }
+
+            // 更新订单状态为 OPENED
+            LocalDateTime openedAt = LocalDateTime.now();
+            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+                    .eq(BlindBoxOrder::getId, order.getId())
+                    .set(BlindBoxOrder::getStatus, OrderStatus.OPENED));
+
+            // 生成盲盒方案
+            BlindBoxPreference preference = preferenceService.getByOrderId(order.getId());
+            SchemeResponse scheme = schemeService.generateScheme(preference);
+
+            // 将方案序列化为 JSON
+            String resultText;
+            try {
+                resultText = objectMapper.writeValueAsString(scheme);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("序列化方案失败", e);
+            }
+
+            // 保存结果
+            BlindBoxResult result = BlindBoxResult.builder()
+                    .orderId(order.getId())
+                    .destination(scheme.destination())
+                    .destinationId(scheme.destinationId())
+                    .theme(scheme.theme())
+                    .resultText(resultText)
+                    .openedAt(openedAt)
+                    .build();
+            resultMapper.insert(result);
+
+            log.info("开盒成功: orderNo={}, destination={}", orderNo, scheme.destination());
+
+            // 返回更新后的订单
+            BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+            return OrderConverter.toResponse(orderMapper.selectById(order.getId()), template);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException("开盒操作被中断");
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    // ========== 模拟支付回调 ==========
+
+    @Override
+    @Transactional
+    public void payCallback(String orderNo, String payMethod) {
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getOrderNo, orderNo);
+        BlindBoxOrder order = orderMapper.selectOne(wrapper);
+
+        if (order == null) {
+            throw new ResourceNotFoundException("订单不存在：orderNo=" + orderNo);
+        }
+
+        // 幂等检查：已支付直接返回
+        if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.OPENED) {
+            log.info("支付回调幂等: orderNo={}, status={}", orderNo, order.getStatus());
+            return;
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BusinessException("订单状态不支持支付：status=" + order.getStatus());
+        }
+
+        orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+                .eq(BlindBoxOrder::getId, order.getId())
+                .set(BlindBoxOrder::getStatus, OrderStatus.PAID)
+                .set(BlindBoxOrder::getPayTime, LocalDateTime.now())
+                .set(BlindBoxOrder::getPayMethod, payMethod));
+
+        log.info("支付成功: orderNo={}, payMethod={}", orderNo, payMethod);
+    }
+
+    // ========== 定时任务：过期订单扫描 ==========
+
+    @Override
+    @Scheduled(fixedRate = 60000) // 每分钟执行一次
+    @Transactional
+    public void cancelExpiredOrders() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 查询过期且待支付的订单
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getStatus, OrderStatus.PENDING)
+                .lt(BlindBoxOrder::getExpireAt, now);
+
+        Page<BlindBoxOrder> pageObj = new Page<>(1, 100);
+        Page<BlindBoxOrder> expiredOrders = orderMapper.selectPage(pageObj, wrapper);
+
+        if (expiredOrders.getRecords().isEmpty()) {
+            return;
+        }
+
+        for (BlindBoxOrder order : expiredOrders.getRecords()) {
+            // 更新状态为 CANCELLED
+            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+                    .eq(BlindBoxOrder::getId, order.getId())
+                    .set(BlindBoxOrder::getStatus, OrderStatus.CANCELLED));
+
+            // 限定盲盒恢复库存
+            BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+            if (template != null && template.getType() == BlindBoxType.LIMITED) {
+                templateMapper.incrementStock(template.getId());
+            }
+
+            log.info("自动取消过期订单: orderNo={}, templateId={}", order.getOrderNo(), order.getTemplateId());
+        }
+    }
+
+    // ========== 我的盲盒列表 ==========
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> listMyBlindBoxes(Long userId, int page, int limit, Boolean opened) {
+        Page<BlindBoxOrder> pageObj = new Page<>(page, limit);
+
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getUserId, userId);
+
+        // 按开盒状态筛选
+        if (opened != null) {
+            if (opened) {
+                wrapper.eq(BlindBoxOrder::getStatus, OrderStatus.OPENED);
+            } else {
+                wrapper.ne(BlindBoxOrder::getStatus, OrderStatus.OPENED);
+            }
+        }
+        wrapper.orderByDesc(BlindBoxOrder::getCreatedAt);
+
+        Page<BlindBoxOrder> result = orderMapper.selectPage(pageObj, wrapper);
+
+        Page<OrderResponse> responsePage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
+        responsePage.setRecords(
+                result.getRecords().stream()
+                        .map(order -> {
+                            BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+                            return OrderConverter.toResponse(order, template);
+                        })
+                        .toList()
+        );
+        return responsePage;
+    }
+
+    // ========== 私有辅助 ==========
+
+    /**
+     * 通过分布式锁 + MySQL 乐观锁扣减库存。
+     */
+    private void decrementStockWithLock(Long templateId) {
+        String lockKey = "lock:blindbox:stock:" + templateId;
+        RLock lock = redissonClient.getLock(lockKey);
+        try {
+            if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+                throw new BusinessException("系统繁忙，请稍后重试");
+            }
+
+            int rows = templateMapper.decrementStock(templateId);
+            if (rows == 0) {
+                throw new BusinessException("库存不足");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException("库存扣减被中断");
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 生成订单号：BByyyyMMddXXXX。
+     */
+    private String generateOrderNo() {
+        String dateStr = LocalDateTime.now().format(ORDER_NO_DATE_FMT);
+        String key = "bb_order_seq_" + dateStr;
+
+        long seq = dailySeqBase.computeIfAbsent(key, k -> orderSeq.get());
+        long currentSeq = orderSeq.incrementAndGet() - seq;
+
+        return String.format("BB%s%04d", dateStr, currentSeq);
+    }
+
+    private BlindBoxTemplate requireTemplate(Long id) {
+        BlindBoxTemplate template = templateMapper.selectById(id);
+        if (template == null) {
+            throw new ResourceNotFoundException("盲盒模板不存在：id=" + id);
+        }
+        return template;
+    }
+
+    private BlindBoxOrder requireOrder(String orderNo, Long userId) {
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getOrderNo, orderNo);
+        BlindBoxOrder order = orderMapper.selectOne(wrapper);
+
+        if (order == null) {
+            throw new ResourceNotFoundException("订单不存在：orderNo=" + orderNo);
+        }
+        if (!order.getUserId().equals(userId)) {
+            throw new ForbiddenException("无权查看他人订单");
+        }
+        return order;
+    }
+}
