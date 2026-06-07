@@ -30,7 +30,7 @@
 - **认证**：JWT (HS256)，Access Token 15分钟 + Refresh Token 7天轮换
 - **安全**：BCrypt 密码加密、SHA-256 令牌哈希、防枚举攻击、Token 轮换防重放
 - **架构**：Spring Security + MyBatis Plus + MySQL
-- **数据库**：`users`、`refresh_tokens`、`password_reset_tokens`（SQL 见 `docs/ctrip_user.sql`）
+- **数据库**：`users`、`refresh_tokens`、`password_reset_tokens`（SQL 见 `docs/SQL/ctrip_user.sql`）
 - **测试**：JWT 过滤器单元测试、Service 层测试
 
 ### 待补充
@@ -190,12 +190,16 @@
 
 | 表名 | 说明 | 核心字段 |
 |------|------|---------|
-| `blind_box_template` | 盲盒模板 | id, name, type(COMPLETE/DESTINATION/HOTEL), price, stock, rule_config(JSON), status(ACTIVE/INACTIVE), created_at |
+| `blind_box_template` | 盲盒模板 | id, name, type(DAILY/LIMITED), price, stock, rule_config(JSON), status(ACTIVE/INACTIVE), created_at |
 | `blind_box_order` | 盲盒订单 | id, user_id(FK→users), template_id(FK), order_no, status(PENDING/PAID/OPENED/REFUNDED/CANCELLED), pay_amount, pay_method, pay_time, expire_at, created_at |
 | `blind_box_result` | 盲盒结果 | id, order_id(FK), destination, theme, result_text(LONGTEXT JSON), result_image_url(OSS), share_code(短码), share_expires_at, opened_at |
 | `blind_box_preference` | 盲盒预选参数 | id, order_id(FK), departure_city, budget_level(ECONOMY/STANDARD/LUXURY), theme, image_tags(JSON), created_at |
 
 ### 4.2 盲盒模板管理
+
+> **盲盒类型说明**：
+> - **日常盲盒（DAILY）**：不限量，用户可随时购买，`stock` 字段标记为 -1 表示无限
+> - **限定盲盒（LIMITED）**：限时限量，需抢购，`stock` 为具体数值，配合 Redis 扣减库存
 
 | 任务 | 接口 | 说明 |
 |------|------|------|
@@ -215,21 +219,24 @@
 
 ### 4.4 AI 盲盒生成
 
-#### 预选参数与图片分析
+#### 预选参数（图片分析暂不实现）
+
+> **AI 图片分析暂不实现**：AI 处理图片提取特征信息的接口尚未实现，盲盒生成中暂不勾选上传图片 AI 分析功能。
+> 以下保留设计文档，后续迭代接入。
 
 盲盒生成前用户可提交一组预选参数（`ctrip_modules.md` 3.2-3.3）：
 
 ```
-设定出发地/时间范围 → 选择预算区间 → 设定旅行主题(可选) → 上传参考图片(可选)
+设定出发地/时间范围 → 选择预算区间 → 设定旅行主题(可选) → 上传参考图片(可选，暂不实现)
 ```
 
 | 任务 | 接口 | 说明 |
 |------|------|------|
-| 图片分析 | `POST /api/v1/blind-box/analyze-image` | 上传参考图片，AI 分析特征标签，**一步到位** |
-| 创建订单 | `POST /api/v1/blind-box/orders` | 提交预选参数（含 imageTags），15分钟支付超时 |
+| ~~图片分析~~ | ~~`POST /api/v1/blind-box/analyze-image`~~ | **暂不实现**：上传参考图片，AI 分析特征标签 |
+| 创建订单 | `POST /api/v1/blind-box/orders` | 提交预选参数（出发地、预算、主题等），15分钟支付超时 |
 | 开盒 | `POST /api/v1/blind-box/orders/{orderNo}/open` | 解锁方案、返回结果 |
 
-**图片分析流程**（与通用图片上传不同）：
+**图片分析流程**（与通用图片上传不同，**暂不实现**）：
 
 ```
 用户上传图片 → 读到内存 → 调用 AI API 分析 → 返回特征标签 → 丢弃图片（不持久化）
@@ -246,12 +253,11 @@ POST /api/v1/blind-box/orders
   "templateId": 1,
   "departureCity": "上海",
   "budgetLevel": "STANDARD",
-  "theme": "beach",
-  "imageTags": ["beach", "tropical", "ocean"]
+  "theme": "beach"
 }
 ```
 
-预选参数存入 `blind_box_preference` 表，其中 `image_tags JSON` 字段存 AI 分析结果。
+预选参数存入 `blind_box_preference` 表，其中 `image_tags JSON` 字段（**暂不实现**：AI 图片分析尚未就绪）。
 
 **MVP 阶段 AI 实现策略**：
 - 图片识别：MVP 阶段可 mock 返回预设标签（如 `["mountain", "nature"]`），后续对接通义千问/文心一言等大模型 API
@@ -266,34 +272,34 @@ POST /api/v1/blind-box/orders
 | 我的盲盒 | `GET /api/v1/blind-box/my` | 购买/开盒记录 |
 | 结果详情 | `GET /api/v1/blind-box/orders/{orderNo}/result` | 完整旅行方案（JSON 格式：目的地/行程/酒店/交通/预算） |
 | 导入行程 | `POST /api/v1/blind-box/orders/{orderNo}/to-itinerary` | 一键转为行程（复制 itinerary_data 到行程表） |
-| 下载结果图 | `GET /api/v1/blind-box/orders/{orderNo}/result-image` | 返回 AI 生成的可视化行程单图片（PNG/JPEG），供用户保存/分享 |
-| 生成分享链接 | `POST /api/v1/blind-box/orders/{orderNo}/share-result` | 生成只读分享链接（含结果图），返回短码 |
-| 查看分享结果 | `GET /api/v1/blind-box/share/{shareCode}` | 无需登录，只读查看结果图 + 行程概览 |
+| ~~下载结果图~~ | ~~`GET /api/v1/blind-box/orders/{orderNo}/result-image`~~ | **暂不实现**：返回 AI 生成的可视化行程单图片 |
+| 生成分享链接 | `POST /api/v1/blind-box/orders/{orderNo}/share-result` | 生成只读分享链接（结果图暂不展示），返回短码 |
+| 查看分享结果 | `GET /api/v1/blind-box/share/{shareCode}` | 无需登录，只读查看行程概览（结果图暂不展示） |
 
 ### 4.6 技术要点
 
-- **库存扣减**：MVP 阶段数据库行锁（`SELECT ... FOR UPDATE`），后续接入 Redis
+- **库存扣减**：日常盲盒无需库存（`stock = -1`），限定盲盒使用 Redis 扣减库存（`stock > 0`），MVP 阶段数据库行锁（`SELECT ... FOR UPDATE`）
 - **订单超时**：定时任务扫描过期订单，自动取消 + 恢复库存
 - **幂等性**：支付回调需幂等处理，防止重复回调
-- **AI 集成**：封装 `AiService` 接口（`List<String> analyzeImage(InputStream image)`），MVP 返回 mock 数据，后续对接真实大模型 API
+- **AI 集成**：封装 `AiService` 接口（`List<String> analyzeImage(InputStream image)`），MVP 返回 mock 数据，后续对接真实大模型 API（**图片分析功能暂不实现**）
 - **异步处理**：开盒生成可异步（MVP 阶段同步即可，后续接入 RabbitMQ）
-- **预选参数**：`POST /api/v1/blind-box/analyze-image` 图片分析后不持久化图片，仅返回特征标签存入 `blind_box_preference.image_tags`；创建订单时与出发地、预算等一并提交
+- **预选参数**：~~`POST /api/v1/blind-box/analyze-image` 图片分析后不持久化图片，仅返回特征标签存入 `blind_box_preference.image_tags`~~（**暂不实现**）；创建订单时与出发地、预算等一并提交
 - **盲盒方案生成**：基于 `blind_box_preference` 中的标签/主题/预算等参数，从目的地数据库按权重随机选取 + 预设规则组装行程
-- **结果图生成**：MVP 阶段使用预设模板生成静态图片（如 Java 绘图 / HTML 转图片），存入 `result_image_url`；后续接入 AI 生成
-- **结果图下载**：`GET /api/v1/blind-box/orders/{orderNo}/result-image` 返回图片二进制流，设置 `Content-Disposition: attachment` 触发浏览器下载
-- **结果分享**：生成 6 位 Base62 短码存 `share_code`，分享链接只读展示结果图 + 行程概览，可设置过期时间（`share_expires_at`）
+- **结果图生成**：~~MVP 阶段使用预设模板生成静态图片（如 Java 绘图 / HTML 转图片），存入 `result_image_url`~~（**暂不实现**：AI 生成结果图功能尚未就绪）；后续接入 AI 生成
+- **结果图下载**：~~`GET /api/v1/blind-box/orders/{orderNo}/result-image` 返回图片二进制流~~（**暂不实现**）
+- **结果分享**：生成 6 位 Base62 短码存 `share_code`，分享链接只读展示结果图 + 行程概览（**结果图暂不展示**），可设置过期时间（`share_expires_at`）
 
 ### 4.7 验收标准
 
 - [ ] 盲盒列表展示正常，库存/价格正确
-- [ ] 图片分析接口返回特征标签（MVP mock 即可），不持久化图片
+- [ ] ~~图片分析接口返回特征标签（MVP mock 即可），不持久化图片~~（**暂不实现**）
 - [ ] 创建订单时预选参数正确存入 `blind_box_preference` 表
 - [ ] 创建订单 → 模拟支付 → 支付成功流程完整
 - [ ] 订单超时自动取消
 - [ ] 开盒返回完整旅行方案（目的地 + 酒店 + 行程数据 + 预算）
 - [ ] 盲盒结果可一键导入行程
-- [ ] 结果图可下载（PNG/JPEG），浏览器触发文件下载
-- [ ] 结果分享链接可访问，取消/过期后失效
+- [ ] ~~结果图可下载（PNG/JPEG），浏览器触发文件下载~~（**暂不实现**）
+- [ ] 结果分享链接可访问，取消/过期后失效（结果图暂不展示）
 - [ ] 库存扣减/恢复正确，无超卖
 - [ ] 所有接口有单元测试覆盖
 

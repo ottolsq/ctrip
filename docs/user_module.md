@@ -222,7 +222,7 @@
 
 ## 🗄️ 四、数据模型设计
 
-==用户数据表位于 ./ctrip_user.sql==
+==用户数据表位于 ./SQL/ctrip_user.sql==
 
 ### 1. User 实体（users 表）
 
