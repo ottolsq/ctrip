@@ -29,9 +29,6 @@ public class GuideController {
         this.guideService = guideService;
     }
 
-    /**
-     * 分页查询攻略列表（公开，仅已发布）。
-     */
     // todo: 这里依然需要jwt
     @GetMapping
     public ResponseEntity<ApiResponse<Page<GuideListResponse>>> list(
@@ -46,9 +43,6 @@ public class GuideController {
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /**
-     * 获取攻略详情（公开，浏览量 +1）。
-     */
     // todo: 这里依然需要jwt
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<GuideResponse>> getDetail(@PathVariable Long id) {
@@ -56,9 +50,6 @@ public class GuideController {
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /**
-     * 发布攻略（需 JWT 认证）。
-     */
     @PostMapping
     public ResponseEntity<ApiResponse<GuideResponse>> create(
             @AuthenticationPrincipal Long userId,
@@ -67,9 +58,6 @@ public class GuideController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
     }
 
-    /**
-     * 编辑攻略（需 JWT 认证，仅作者）。
-     */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<GuideResponse>> update(
             @PathVariable Long id,
@@ -79,9 +67,6 @@ public class GuideController {
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /**
-     * 删除攻略（需 JWT 认证，仅作者）。
-     */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long id,
@@ -90,9 +75,6 @@ public class GuideController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    /**
-     * 点赞攻略（需 JWT 认证）。
-     */
     @PostMapping("/{id}/like")
     public ResponseEntity<ApiResponse<Void>> like(@PathVariable Long id,
                                                    @AuthenticationPrincipal Long userId) {
@@ -100,9 +82,6 @@ public class GuideController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    /**
-     * 取消点赞（需 JWT 认证）。
-     */
     @DeleteMapping("/{id}/like")
     public ResponseEntity<ApiResponse<Void>> unlike(@PathVariable Long id,
                                                      @AuthenticationPrincipal Long userId) {

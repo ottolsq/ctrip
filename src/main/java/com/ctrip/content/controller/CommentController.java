@@ -27,18 +27,12 @@ public class CommentController {
         this.commentService = commentService;
     }
 
-    /**
-     * 查询攻略评论列表（树形结构，公开）。
-     */
     @GetMapping
     public ResponseEntity<ApiResponse<List<CommentTreeResponse>>> list(@PathVariable Long guideId) {
         List<CommentTreeResponse> result = commentService.listComments(guideId);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /**
-     * 发表评论（需 JWT 认证，支持回复）。
-     */
     @PostMapping
     public ResponseEntity<ApiResponse<CommentTreeResponse>> create(
             @PathVariable Long guideId,
@@ -48,9 +42,6 @@ public class CommentController {
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
-    /**
-     * 删除评论（需 JWT 认证，仅评论作者）。
-     */
     @DeleteMapping("/{commentId}")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long commentId,

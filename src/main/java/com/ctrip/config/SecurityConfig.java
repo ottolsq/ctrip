@@ -82,6 +82,11 @@ public class SecurityConfig {
             // 路由授权：认证端点公开，管理端需要 ADMIN 或 CONTENT_OPERATOR 角色，其余需要 JWT
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                // 盲盒公开接口：模板列表/详情、分享查看、支付回调
+                .requestMatchers("/api/v1/blind-box").permitAll()
+                .requestMatchers("/api/v1/blind-box/share/**").permitAll()
+                .requestMatchers("/api/v1/payments/blind-box/**").permitAll()
+                .requestMatchers("/api/v1/blind-box/{id}").permitAll()
                 .requestMatchers("/api/v1/itineraries/share/**").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "CONTENT_OPERATOR")
                 .anyRequest().authenticated()
