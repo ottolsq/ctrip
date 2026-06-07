@@ -25,6 +25,7 @@ import com.ctrip.blindbox.service.BlindBoxSchemeService;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ForbiddenException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import com.ctrip.messaging.publisher.EventPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.redisson.api.RLock;
@@ -68,6 +69,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     private final BlindBoxSchemeService schemeService;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
+    private final EventPublisher eventPublisher;
 
     public BlindBoxOrderServiceImpl(BlindBoxOrderMapper orderMapper,
                                     BlindBoxTemplateMapper templateMapper,
@@ -76,7 +78,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                                     BlindBoxPreferenceService preferenceService,
                                     BlindBoxSchemeService schemeService,
                                     RedissonClient redissonClient,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    EventPublisher eventPublisher) {
         this.orderMapper = orderMapper;
         this.templateMapper = templateMapper;
         this.resultMapper = resultMapper;
@@ -85,6 +88,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         this.schemeService = schemeService;
         this.redissonClient = redissonClient;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     // ========== 订单创建 ==========
@@ -128,6 +132,12 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         );
 
         log.info("创建盲盒订单: orderNo={}, userId={}, templateId={}", orderNo, userId, template.getId());
+
+        // 发布订单创建事件
+        eventPublisher.publishOrderStatusEvent(
+                "ORDER_CREATED", order.getId(), orderNo, userId,
+                template.getId(), template.getPrice(), null, null);
+
         return OrderConverter.toResponse(order, template);
     }
 
@@ -193,6 +203,11 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         }
 
         log.info("取消订单: orderNo={}", orderNo);
+
+        // 发布订单取消事件
+        eventPublisher.publishOrderStatusEvent(
+                "ORDER_CANCELLED", order.getId(), orderNo, order.getUserId(),
+                order.getTemplateId(), order.getPayAmount(), order.getPayMethod(), null);
     }
 
     // ========== 开盒 ==========
@@ -254,6 +269,21 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
 
             log.info("开盒成功: orderNo={}, destination={}", orderNo, scheme.destination());
 
+            // 发布盲盒结果生成事件
+            eventPublisher.publishBlindBoxOpenEvent(
+                    "BLINDBOX_RESULT_GENERATED", order.getId(), userId,
+                    result.getId(), Map.of(
+                            "destination", scheme.destination(),
+                            "destinationId", scheme.destinationId(),
+                            "theme", scheme.theme(),
+                            "days", scheme.days()
+                    ));
+
+            // 发布订单开盒状态事件
+            eventPublisher.publishOrderStatusEvent(
+                    "ORDER_OPENED", order.getId(), orderNo, userId,
+                    order.getTemplateId(), order.getPayAmount(), order.getPayMethod(), null);
+
             // 返回更新后的订单
             BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
             return OrderConverter.toResponse(orderMapper.selectById(order.getId()), template);
@@ -298,6 +328,12 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 .set(BlindBoxOrder::getPayMethod, payMethod));
 
         log.info("支付成功: orderNo={}, payMethod={}", orderNo, payMethod);
+
+        // 发布订单支付事件
+        eventPublisher.publishOrderStatusEvent(
+                "ORDER_PAID", order.getId(), orderNo, order.getUserId(),
+                order.getTemplateId(), order.getPayAmount(), payMethod,
+                Map.of("payTime", order.getPayTime() != null ? order.getPayTime().toString() : ""));
     }
 
     // ========== 定时任务：过期订单扫描 ==========
