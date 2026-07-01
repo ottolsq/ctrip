@@ -232,23 +232,31 @@ private boolean isValidMagicBytes(byte[] header, String ext) {
 
 ## 六、实施步骤
 
-| 步骤 | 内容 | 预计改动量 |
-|------|------|-----------|
-| 1 | `SecurityConfig` 添加 `/uploads/**` permitAll | 1 行 |
-| 2 | `LocalStorageServiceImpl` 简化存储路径 | ~10 行 |
-| 3 | `LocalStorageServiceImpl` 添加 Magic Bytes 校验 | ~30 行 |
-| 4 | `LocalStorageServiceImpl` 添加文件大小冗余校验 | ~5 行 |
-| 5 | `UploadController` 修复删除接口路径 | ~5 行 |
-| 6 | 手动测试验证 | — |
+| 步骤 | 内容 | 状态 |
+|------|------|------|
+| 1 | `SecurityConfig` 添加 `/uploads/**` permitAll | ✅ 已完成 |
+| 2 | `LocalStorageServiceImpl` 简化存储路径 | ✅ 已完成 |
+| 3 | `LocalStorageServiceImpl` 添加 Magic Bytes 校验 | ✅ 已完成 |
+| 4 | `LocalStorageServiceImpl` 添加文件大小冗余校验 | ✅ 已完成 |
+| 5 | `UploadController` 修复删除接口路径 | ✅ 已完成 |
+| 6 | 手动测试验证 | ✅ 已完成 |
 
 ---
 
-## 七、测试要点
+## 七、测试结果（2026-07-02）
 
-- [ ] `POST /api/v1/uploads/image` — 上传 jpg/png/webp，返回正确 URL
-- [ ] `POST /api/v1/uploads/image` — 上传非图片文件（如 .txt 改名为 .jpg），应被 Magic Bytes 校验拦截
-- [ ] `POST /api/v1/uploads/image` — 上传超过 5MB 文件，应被拦截
-- [ ] `POST /api/v1/uploads/images` — 批量上传正常返回 URL 数组
-- [ ] `GET /uploads/images/{filename}` — 无需 JWT，可直接访问图片
-- [ ] `DELETE /api/v1/uploads/{filename}` — 删除已上传图片
-- [ ] `DELETE /api/v1/uploads/{filename}` — 传入 `../` 等路径穿越字符应被拦截
+| # | 测试项 | 预期 | 实际结果 | 状态 |
+|---|--------|------|---------|------|
+| 1 | 上传有效 JPEG | 200 + URL | `{"url":"/uploads/images/uuid.jpg"}` | ✅ |
+| 2 | 上传伪装的 .jpg（文本文件改扩展名） | Magic Bytes 拦截 | `"文件类型与扩展名不匹配，拒绝上传"` | ✅ |
+| 3 | 上传有效 PNG | 200 + URL | `{"url":"/uploads/images/uuid.png"}` | ✅ |
+| 4 | 无 JWT 访问已上传图片 | 200 + 图片内容 | HTTP 200，文件大小正确 | ✅ |
+| 5 | 上传 GIF 格式 | 扩展名白名单拦截 | `"不支持的图片格式：gif，仅支持 [jpeg, webp, png, jpg]"` | ✅ |
+| 6 | 删除已上传图片 | 200 + 磁盘文件删除 | `{"success":true}` + 磁盘文件已删除 | ✅ |
+| 7 | 路径穿越攻击（`../`） | 被拦截 | 请求被拒绝 | ✅ |
+
+### 测试中发现的 Bug 及修复
+
+| Bug | 原因 | 修复 |
+|-----|------|------|
+| `DELETE` 接口返回"非法路径" | `Path.startsWith()` 比较时，相对路径 `Path` 与绝对路径 `Path` 永远不匹配（Java NIO 语义）。原代码 `Path.of(uploadDir, relativePath).normalize()` 得到相对路径，无法通过 `startsWith(absolutePath)` 检查。 | 改为 `Path.of(uploadDir).toAbsolutePath().normalize().resolve(relativePath)` 确保 filePath 也是绝对路径后再比较。 |

@@ -1,14 +1,12 @@
 package com.ctrip.content.controller;
 
 import com.ctrip.common.exception.AuthenticationException;
-import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.response.ApiResponse;
 import com.ctrip.content.dto.response.ImageBatchUploadResponse;
 import com.ctrip.content.dto.response.ImageUploadResponse;
 import com.ctrip.content.service.storage.ImageStorageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -60,18 +58,14 @@ public class UploadController {
     }
 
     /**
-     * 删除图片（需 JWT 认证）。
+     * 删除已上传的图片（需 JWT 认证）。
+     * MVP 阶段暂不校验图片所有者，后续通过 upload_records 表补齐。
      */
-    // todo: 删除上传图片bug
-    @DeleteMapping("/images/{year}/{month}/{day}/{filename:.+}")
+    @DeleteMapping("/{filename:.+}")
     public ResponseEntity<ApiResponse<Void>> delete(
-            @PathVariable String year,
-            @PathVariable String month,
-            @PathVariable String day,
-            @PathVariable String filename,
-            @AuthenticationPrincipal Long userId) {
+            @PathVariable String filename) {
         validateFilename(filename);
-        String url = "/uploads/images/" + year + "/" + month + "/" + day + "/" + filename;
+        String url = "/uploads/images/" + filename;
         imageStorageService.delete(url);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
