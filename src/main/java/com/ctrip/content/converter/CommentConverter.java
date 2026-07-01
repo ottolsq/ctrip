@@ -36,11 +36,17 @@ public class CommentConverter {
 
     /**
      * 将单个 Entity 转换为树形响应 DTO（无子节点）。
+     *
+     * @param entity    评论实体
+     * @param userName  用户名字
+     * @param userAvatar 用户头像
      */
-    public static CommentTreeResponse toTreeResponse(Comment entity) {
+    public static CommentTreeResponse toTreeResponse(Comment entity, String userName, String userAvatar) {
         return new CommentTreeResponse(
                 entity.getId(),
                 entity.getUserId(),
+                userName,
+                userAvatar,
                 entity.getParentId(),
                 entity.getContent(),
                 entity.getLikeCount(),
@@ -54,8 +60,12 @@ public class CommentConverter {
      *
      * <p>按 parentId 分组：parentId = null 为根评论，非 null 为回复。
      * 将所有回复挂载到对应的根评论 children 下。
+     *
+     * @param comments      评论列表
+     * @param userInfoMap   用户信息Map（userId -> [userName, userAvatar]）
      */
-    public static List<CommentTreeResponse> toTreeList(List<Comment> comments) {
+    public static List<CommentTreeResponse> toTreeList(List<Comment> comments, 
+                                                        Map<Long, String[]> userInfoMap) {
         // 按 parentId 分组
         Map<Long, List<Comment>> repliesByParent = comments.stream()
                 .filter(c -> c.getParentId() != null)
@@ -65,14 +75,20 @@ public class CommentConverter {
         return comments.stream()
                 .filter(c -> c.getParentId() == null)
                 .map(root -> {
+                    String[] rootUserInfo = userInfoMap.getOrDefault(root.getUserId(), new String[]{"匿名", null});
                     List<CommentTreeResponse> children = repliesByParent
                             .getOrDefault(root.getId(), List.of())
                             .stream()
-                            .map(CommentConverter::toTreeResponse)
+                            .map(child -> {
+                                String[] childUserInfo = userInfoMap.getOrDefault(child.getUserId(), new String[]{"匿名", null});
+                                return toTreeResponse(child, childUserInfo[0], childUserInfo[1]);
+                            })
                             .toList();
                     return new CommentTreeResponse(
                             root.getId(),
                             root.getUserId(),
+                            rootUserInfo[0],
+                            rootUserInfo[1],
                             root.getParentId(),
                             root.getContent(),
                             root.getLikeCount(),

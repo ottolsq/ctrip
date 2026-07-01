@@ -40,11 +40,17 @@ public class GuideConverter {
      *
      * @param entity         攻略实体
      * @param destinationName 关联目的地名称（可为 null）
+     * @param authorName      作者名字（可为 null）
+     * @param authorAvatar    作者头像（可为 null）
+     * @param commentCount    评论数量
      */
-    public static GuideResponse toResponse(Guide entity, String destinationName) {
+    public static GuideResponse toResponse(Guide entity, String destinationName, 
+                                           String authorName, String authorAvatar, int commentCount) {
         return new GuideResponse(
                 entity.getId(),
                 entity.getAuthorId(),
+                authorName,
+                authorAvatar,
                 entity.getTitle(),
                 entity.getContent(),
                 entity.getDestinationId(),
@@ -54,6 +60,7 @@ public class GuideConverter {
                 entity.getStatus() != null ? entity.getStatus().name() : null,
                 entity.getViewCount(),
                 entity.getLikeCount(),
+                commentCount,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
@@ -65,16 +72,23 @@ public class GuideConverter {
      *
      * @param entity         攻略实体
      * @param destinationName 关联目的地名称（可为 null）
+     * @param authorName      作者名字（可为 null）
+     * @param authorAvatar    作者头像（可为 null）
+     * @param commentCount    评论数量
      */
-    public static GuideListResponse toListResponse(Guide entity, String destinationName) {
+    public static GuideListResponse toListResponse(Guide entity, String destinationName,
+                                                    String authorName, String authorAvatar, int commentCount) {
         return new GuideListResponse(
                 entity.getId(),
                 entity.getAuthorId(),
+                authorName,
+                authorAvatar,
                 entity.getTitle(),
                 entity.getCoverUrl(),
                 destinationName,
                 entity.getViewCount(),
                 entity.getLikeCount(),
+                commentCount,
                 entity.getCreatedAt()
         );
     }

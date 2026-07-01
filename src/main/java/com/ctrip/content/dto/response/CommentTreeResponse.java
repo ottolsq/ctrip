@@ -10,6 +10,8 @@ import java.util.List;
 public record CommentTreeResponse(
         Long id,
         Long userId,
+        String userName,
+        String userAvatar,
         Long parentId,
         String content,
         Integer likeCount,

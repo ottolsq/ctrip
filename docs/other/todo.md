@@ -8,8 +8,6 @@
 
 图片安全上传校验
 
-需要有一个 ai 模块 去处理，ai相关的请求
-
 POST /api/v1/itineraries/days/{dayId}/items/reorder 传入参数无校验（可改可不改）
 
 收藏内容 无法查看

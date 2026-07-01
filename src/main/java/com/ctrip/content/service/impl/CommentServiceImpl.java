@@ -18,7 +18,8 @@ import com.ctrip.user.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 评论服务实现类。
@@ -47,7 +48,14 @@ public class CommentServiceImpl implements CommentService {
                 .orderByAsc(Comment::getCreatedAt);
         List<Comment> comments = commentMapper.selectList(wrapper);
 
-        return CommentConverter.toTreeList(comments);
+        // 批量查询用户信息
+        Set<Long> userIds = comments.stream()
+                .map(Comment::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String[]> userInfoMap = batchQueryUserInfo(userIds);
+
+        return CommentConverter.toTreeList(comments, userInfoMap);
     }
 
     @Override
@@ -69,7 +77,12 @@ public class CommentServiceImpl implements CommentService {
         Comment comment = CommentConverter.toEntity(guideId, userId, request);
         commentMapper.insert(comment);
 
-        return CommentConverter.toTreeResponse(requireComment(comment.getId()));
+        // 查询用户信息
+        User user = userMapper.selectById(userId);
+        String userName = user != null ? user.getUsername() : "匿名";
+        String userAvatar = user != null ? user.getAvatarUrl() : null;
+
+        return CommentConverter.toTreeResponse(requireComment(comment.getId()), userName, userAvatar);
     }
 
     @Override
@@ -132,5 +145,21 @@ public class CommentServiceImpl implements CommentService {
             ids.addAll(collectDescendants(childId));
         }
         return ids;
+    }
+
+    /**
+     * 批量查询用户信息，返回 Map：userId -> [userName, userAvatar]
+     */
+    private Map<Long, String[]> batchQueryUserInfo(Set<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<User> users = userMapper.selectBatchIds(userIds);
+        return users.stream()
+                .collect(Collectors.toMap(
+                        User::getId,
+                        u -> new String[]{u.getUsername(), u.getAvatarUrl()},
+                        (a, b) -> a
+                ));
     }
 }

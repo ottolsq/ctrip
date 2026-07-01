@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 public record GuideResponse(
         Long id,
         Long authorId,
+        String authorName,
+        String authorAvatar,
         String title,
         String content,
         Long destinationId,
@@ -18,6 +20,7 @@ public record GuideResponse(
         String status,
         Integer viewCount,
         Integer likeCount,
+        Integer commentCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

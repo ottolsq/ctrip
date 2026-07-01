@@ -9,10 +9,13 @@ import java.time.LocalDateTime;
 public record GuideListResponse(
         Long id,
         Long authorId,
+        String authorName,
+        String authorAvatar,
         String title,
         String coverUrl,
         String destinationName,    // 关联目的地名称（可选）
         Integer viewCount,
         Integer likeCount,
+        Integer commentCount,
         LocalDateTime createdAt
 ) {}
