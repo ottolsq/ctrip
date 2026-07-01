@@ -60,11 +60,24 @@ export const useUserStore = defineStore('user', () => {
   // 登出
   async function logout() {
     try {
-      await logoutApi()
+      await logoutApi(refreshToken.value)
     } catch (error) {
       console.error('登出接口调用失败:', error)
     } finally {
       resetState()
+    }
+  }
+
+  // 初始化用户信息（应用启动时调用）
+  async function init() {
+    if (token.value && !userInfo.value) {
+      try {
+        await fetchUserProfile()
+      } catch (error) {
+        console.error('初始化用户信息失败:', error)
+        // 如果获取失败，可能是 token 已过期，清除登录状态
+        resetState()
+      }
     }
   }
 
@@ -92,6 +105,7 @@ export const useUserStore = defineStore('user', () => {
     setUserInfo,
     loginSuccess,
     fetchUserProfile,
+    init,
     logout,
     resetState
   }

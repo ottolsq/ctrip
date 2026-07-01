@@ -15,8 +15,9 @@
       <el-form
         ref="formRef"
         :model="form"
-        :rules="formRules"
+        :rules="currentRules"
         size="large"
+        :key="loginType"
         @submit.prevent="handleLogin"
       >
         <!-- 手机号 -->
@@ -101,7 +102,7 @@ const form = reactive({
   password: ''
 })
 
-const formRules = computed(() => ({
+const currentRules = computed(() => ({
   phone: loginType.value === 'phone' ? [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
@@ -117,20 +118,42 @@ const formRules = computed(() => ({
 }))
 
 const handleLogin = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+  console.log('[Login] handleLogin called, loginType:', loginType.value)
+  console.log('[Login] form:', JSON.stringify(form))
+  
+  try {
+    const valid = await formRef.value.validate()
+    console.log('[Login] validate result:', valid)
+  } catch (err) {
+    console.error('[Login] validate error:', err)
+    return
+  }
 
   loading.value = true
+  console.log('[Login] sending request...')
   try {
     const data = { password: form.password }
     if (loginType.value === 'phone') {
-      data.phone = form.phone
+      data.credential = form.phone
     } else {
-      data.email = form.email
+      data.credential = form.email
     }
+    console.log('[Login] request data:', data)
 
     const res = await login(data)
-    userStore.loginSuccess(res.data)
+    console.log('[Login] response:', res)
+    
+    const loginData = res.data || res
+    console.log('[Login] loginData:', loginData)
+    
+    userStore.loginSuccess(loginData)
+
+    // 获取用户信息
+    try {
+      await userStore.fetchUserProfile()
+    } catch (error) {
+      console.error('[Login] 获取用户信息失败:', error)
+    }
 
     ElMessage.success('登录成功')
 
@@ -138,6 +161,7 @@ const handleLogin = async () => {
     const redirect = route.query.redirect || '/'
     router.push(redirect)
   } catch (error) {
+    console.error('[Login] request error:', error)
     // 错误已由 request.js 统一处理
   } finally {
     loading.value = false

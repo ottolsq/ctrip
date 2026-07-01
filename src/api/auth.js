@@ -36,8 +36,8 @@ export function refreshToken(refreshToken) {
 /**
  * 登出
  */
-export function logout() {
-  return request.post('/v1/auth/logout')
+export function logout(refreshToken) {
+  return request.post('/v1/auth/logout', { refreshToken })
 }
 
 /**

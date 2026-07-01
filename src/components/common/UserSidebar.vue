@@ -56,7 +56,7 @@ const handleAvatarUpload = async (file) => {
     return false
   }
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('avatar', file)
   try {
     await updateAvatar(formData)
     await userStore.fetchUserProfile()

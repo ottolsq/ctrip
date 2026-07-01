@@ -54,7 +54,7 @@
               <el-radio-group v-model="form.gender">
                 <el-radio value="MALE">男</el-radio>
                 <el-radio value="FEMALE">女</el-radio>
-                <el-radio value="UNKNOWN">保密</el-radio>
+                <el-radio value="UNSPECIFIED">保密</el-radio>
               </el-radio-group>
             </el-form-item>
 
@@ -69,7 +69,7 @@
               />
             </el-form-item>
 
-            <el-form-item label="个人简介" prop="bio">
+            <!-- <el-form-item label="个人简介" prop="bio">
               <el-input
                 v-model="form.bio"
                 type="textarea"
@@ -78,7 +78,7 @@
                 maxlength="200"
                 show-word-limit
               />
-            </el-form-item>
+            </el-form-item> -->
           </el-form>
         </el-card>
       </el-col>
@@ -101,9 +101,9 @@ const saveLoading = ref(false)
 
 const form = reactive({
   username: '',
-  gender: 'UNKNOWN',
+  gender: 'UNSPECIFIED',
   birthday: '',
-  bio: ''
+  // bio: ''
 })
 
 const formRules = {
@@ -118,9 +118,9 @@ const loadProfile = () => {
   const info = userStore.userInfo
   if (info) {
     form.username = info.username || ''
-    form.gender = info.gender || 'UNKNOWN'
+    form.gender = info.gender || 'UNSPECIFIED'
     form.birthday = info.birthday || ''
-    form.bio = info.bio || ''
+    // form.bio = info.bio || ''
   }
 }
 
@@ -146,7 +146,7 @@ const handleSave = async () => {
       username: form.username,
       gender: form.gender,
       birthday: form.birthday,
-      bio: form.bio
+      // bio: form.bio
     })
 
     // 更新 store

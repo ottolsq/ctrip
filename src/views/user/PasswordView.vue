@@ -22,9 +22,9 @@
             style="max-width: 500px"
             @submit.prevent="handleChange"
           >
-            <el-form-item label="当前密码" prop="oldPassword">
+            <el-form-item label="当前密码" prop="currentPassword">
               <el-input
-                v-model="form.oldPassword"
+                v-model="form.currentPassword"
                 type="password"
                 placeholder="请输入当前密码"
                 :prefix-icon="Lock"
@@ -86,7 +86,7 @@ const formRef = ref(null)
 const loading = ref(false)
 
 const form = reactive({
-  oldPassword: '',
+  currentPassword: '',
   newPassword: '',
   confirmPassword: ''
 })
@@ -100,7 +100,7 @@ const validateConfirmPassword = (rule, value, callback) => {
 }
 
 const formRules = {
-  oldPassword: [
+  currentPassword: [
     { required: true, message: '请输入当前密码', trigger: 'blur' },
     { min: 6, message: '密码至少6个字符', trigger: 'blur' }
   ],
@@ -120,7 +120,7 @@ const handleChange = async () => {
   if (!valid) return
 
   // 检查新密码不能与旧密码相同
-  if (form.oldPassword === form.newPassword) {
+  if (form.currentPassword === form.newPassword) {
     ElMessage.warning('新密码不能与当前密码相同')
     return
   }
@@ -128,7 +128,7 @@ const handleChange = async () => {
   loading.value = true
   try {
     await changePassword({
-      oldPassword: form.oldPassword,
+      currentPassword: form.currentPassword,
       newPassword: form.newPassword
     })
 
@@ -142,7 +142,7 @@ const handleChange = async () => {
 }
 
 const resetForm = () => {
-  form.oldPassword = ''
+  form.currentPassword = ''
   form.newPassword = ''
   form.confirmPassword = ''
   formRef.value?.clearValidate()

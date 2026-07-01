@@ -8,6 +8,12 @@ const request = axios.create({
   timeout: 15000
 })
 
+// 专用于刷新 Token 的实例（不经过响应拦截器，避免递归）
+const refreshRequest = axios.create({
+  baseURL: '/api',
+  timeout: 15000
+})
+
 // 是否正在刷新 Token
 let isRefreshing = false
 // 刷新 Token 期间的请求队列
@@ -35,18 +41,24 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   response => {
     const res = response.data
-    // 后端统一返回格式: { success, data, error }
+    console.log('[Request] response data:', JSON.stringify(res))
+    
     if (res.success !== undefined) {
       if (res.success) {
         return res
       } else {
-        // 业务错误
-        ElMessage.error(res.error || '操作失败')
-        return Promise.reject(new Error(res.error || '操作失败'))
+        ElMessage.error(res.error || res.message || '操作失败')
+        return Promise.reject(new Error(res.error || res.message || '操作失败'))
+      }
+    } else if (res.code !== undefined) {
+      if (res.code === 0 || res.code === 200 || res.code === '0') {
+        return { success: true, data: res.data || res.result }
+      } else {
+        ElMessage.error(res.message || res.msg || '操作失败')
+        return Promise.reject(new Error(res.message || res.msg || '操作失败'))
       }
     }
-    // 非标准格式，直接返回
-    return res
+    return { success: true, data: res }
   },
   async error => {
     const { response, config } = error
@@ -60,13 +72,20 @@ request.interceptors.response.use(
 
     // 401: Token 过期或未登录
     if (status === 401 && !config._isRetry) {
+      // 登录请求本身返回401，直接拒绝，不触发刷新逻辑
+      if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register')) {
+        const msg = response.data?.error || response.data?.message || '登录失败'
+        ElMessage.error(msg)
+        return Promise.reject(error)
+      }
+
       const refreshToken = localStorage.getItem('refreshToken')
 
       if (refreshToken && !isRefreshing) {
         isRefreshing = true
         try {
-          // 尝试刷新 Token
-          const res = await axios.post('/api/v1/auth/refresh', {
+          // 使用独立实例刷新 Token，避免经过响应拦截器造成递归
+          const res = await refreshRequest.post('/v1/auth/refresh', {
             refreshToken
           })
           const { accessToken, refreshToken: newRefreshToken } = res.data.data

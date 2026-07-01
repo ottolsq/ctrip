@@ -15,8 +15,9 @@
       <el-form
         ref="formRef"
         :model="form"
-        :rules="formRules"
+        :rules="currentRules"
         size="large"
+        :key="registerType"
         @submit.prevent="handleRegister"
       >
         <!-- 用户名 -->
@@ -162,7 +163,7 @@ const validateConfirmPassword = (rule, value, callback) => {
   }
 }
 
-const formRules = computed(() => ({
+const currentRules = computed(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 2, max: 20, message: '用户名长度为2-20个字符', trigger: 'blur' }
@@ -223,10 +224,19 @@ const handleSendCode = async () => {
 
 // 注册
 const handleRegister = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+  console.log('[Register] handleRegister called, registerType:', registerType.value)
+  console.log('[Register] form:', JSON.stringify(form))
+  
+  try {
+    const valid = await formRef.value.validate()
+    console.log('[Register] validate result:', valid)
+  } catch (err) {
+    console.error('[Register] validate error:', err)
+    return
+  }
 
   loading.value = true
+  console.log('[Register] sending request...')
   try {
     let res
     if (registerType.value === 'phone') {
@@ -234,7 +244,7 @@ const handleRegister = async () => {
         username: form.username,
         phone: form.phone,
         password: form.password,
-        verifyCode: form.verifyCode
+        smsCode: form.verifyCode
       })
     } else {
       res = await registerByEmail({
@@ -243,11 +253,12 @@ const handleRegister = async () => {
         password: form.password
       })
     }
+    console.log('[Register] response:', res)
 
     ElMessage.success('注册成功，请登录')
     router.push('/login')
   } catch (error) {
-    // 错误已由 request.js 处理
+    console.error('[Register] request error:', error)
   } finally {
     loading.value = false
   }
