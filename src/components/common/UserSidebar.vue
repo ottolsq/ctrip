@@ -10,7 +10,7 @@
         <el-avatar :size="80" :src="userStore.avatar">
           <el-icon :size="36"><User /></el-icon>
         </el-avatar>
-        <div class="avatar-tip">点击更换头像</div>
+        <!-- <div class="avatar-tip">点击更换头像</div> -->
       </el-upload>
       <h3 class="user-name">{{ userStore.username }}</h3>
     </div>
@@ -42,6 +42,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { updateAvatar } from '@/api/user'
+import { uploadImage } from '@/api/upload'
 import { ElMessage } from 'element-plus'
 
 defineProps({
@@ -55,10 +56,15 @@ const handleAvatarUpload = async (file) => {
     ElMessage.error('头像大小不能超过 2MB')
     return false
   }
-  const formData = new FormData()
-  formData.append('avatar', file)
+
   try {
-    await updateAvatar(formData)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const uploadRes = await uploadImage(formData)
+    const avatarUrl = uploadRes.data?.url || uploadRes.data
+
+    await updateAvatar(avatarUrl)
     await userStore.fetchUserProfile()
     ElMessage.success('头像已更新')
   } catch (error) {

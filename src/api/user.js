@@ -27,12 +27,8 @@ export function changePassword(data) {
 
 /**
  * 更新头像
- * @param {FormData} formData - 包含 avatar 文件的 FormData
+ * @param {string} avatarUrl - 头像图片 URL
  */
-export function updateAvatar(formData) {
-  return request.put('/v1/users/me/avatar', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
+export function updateAvatar(avatarUrl) {
+  return request.put('/v1/users/me/avatar', { avatarUrl })
 }

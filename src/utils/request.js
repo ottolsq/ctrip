@@ -124,8 +124,12 @@ request.interceptors.response.use(
         // 没有 refreshToken，直接跳转登录
         localStorage.removeItem('token')
         localStorage.removeItem('refreshToken')
-        ElMessage.error('请先登录')
-        router.push('/login')
+        if (!isRefreshing) {
+          isRefreshing = true
+          ElMessage.error('请先登录')
+          router.push('/login')
+          setTimeout(() => { isRefreshing = false }, 2000)
+        }
       }
     } else if (status === 403) {
       ElMessage.error('权限不足')

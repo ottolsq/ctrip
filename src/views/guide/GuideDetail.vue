@@ -19,7 +19,7 @@
 
       <!-- 封面图 -->
       <div class="cover-wrapper" v-if="guide.coverUrl">
-        <el-image :src="guide.coverUrl" fit="cover" class="detail-cover" />
+        <el-image :src="guide.coverUrl" fit="contain" class="detail-cover" />
       </div>
 
       <!-- 攻略内容 -->
@@ -381,12 +381,13 @@ onMounted(async () => {
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 24px;
-  max-height: 400px;
+  background: #f5f7fa;
 }
 
 .detail-cover {
   width: 100%;
   display: block;
+  max-height: none;
 }
 
 .content-card {
