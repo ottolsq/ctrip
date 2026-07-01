@@ -31,10 +31,10 @@
         <el-icon><Document /></el-icon>
         <span>我的攻略</span>
       </el-menu-item>
-      <el-menu-item index="/user/collections">
+      <!-- <el-menu-item index="/user/collections">
         <el-icon><Star /></el-icon>
         <span>我的收藏</span>
-      </el-menu-item>
+      </el-menu-item> -->
     </el-menu>
   </div>
 </template>

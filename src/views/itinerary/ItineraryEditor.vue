@@ -511,7 +511,6 @@ onMounted(async () => {
   if (isEdit.value) {
     await loadItinerary()
   } else {
-    // 创建行程时，直接启用日期监听
     isDataLoaded.value = true
   }
 })

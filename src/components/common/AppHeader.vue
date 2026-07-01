@@ -40,9 +40,9 @@
                 <el-dropdown-item command="guides">
                   <el-icon><Document /></el-icon>我的攻略
                 </el-dropdown-item>
-                <el-dropdown-item command="collections">
+                <!-- <el-dropdown-item command="collections">
                   <el-icon><Star /></el-icon>我的收藏
-                </el-dropdown-item>
+                </el-dropdown-item> -->
                 <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>退出登录
                 </el-dropdown-item>

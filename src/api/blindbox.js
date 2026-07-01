@@ -21,8 +21,8 @@ export function getBlindBoxTemplate(id) {
 /**
  * 我的盲盒列表
  */
-export function getMyBlindBoxes() {
-  return request.get('/v1/blind-box/my')
+export function getMyBlindBoxes(params) {
+  return request.get('/v1/blind-box/my', { params })
 }
 
 /**
@@ -51,6 +51,13 @@ export function getBlindBoxOrder(orderNo) {
  */
 export function cancelBlindBoxOrder(orderNo) {
   return request.post(`/v1/blind-box/orders/${orderNo}/cancel`)
+}
+
+/**
+ * 模拟支付回调
+ */
+export function blindBoxPayCallback(data) {
+  return request.post('/v1/payments/blind-box/callback', data)
 }
 
 /**
