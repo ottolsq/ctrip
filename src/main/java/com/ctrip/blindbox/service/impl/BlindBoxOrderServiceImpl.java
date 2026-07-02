@@ -36,11 +36,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -55,11 +56,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     private static final Logger log = LoggerFactory.getLogger(BlindBoxOrderServiceImpl.class);
     private static final DateTimeFormatter ORDER_NO_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    /** 订单号序号计数器（内存级，重启后重置，实际生产应使用 Redis INCR）。 */
-    private final AtomicLong orderSeq = new AtomicLong(0);
-
-    /** 每日的订单号前缀缓存 key → 当前序号起始值。 */
-    private final Map<String, Long> dailySeqBase = new ConcurrentHashMap<>();
+    /** Redis 订单号计数器 key 前缀，完整 key 为 bb_order_seq:yyyyMMdd。 */
+    private static final String ORDER_NO_KEY_PREFIX = "bb_order_seq:";
 
     private final BlindBoxOrderMapper orderMapper;
     private final BlindBoxTemplateMapper templateMapper;
@@ -68,6 +66,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     private final BlindBoxPreferenceService preferenceService;
     private final BlindBoxSchemeService schemeService;
     private final RedissonClient redissonClient;
+    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final EventPublisher eventPublisher;
 
@@ -78,6 +77,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                                     BlindBoxPreferenceService preferenceService,
                                     BlindBoxSchemeService schemeService,
                                     RedissonClient redissonClient,
+                                    StringRedisTemplate stringRedisTemplate,
                                     ObjectMapper objectMapper,
                                     EventPublisher eventPublisher) {
         this.orderMapper = orderMapper;
@@ -87,6 +87,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         this.preferenceService = preferenceService;
         this.schemeService = schemeService;
         this.redissonClient = redissonClient;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
     }
@@ -435,15 +436,66 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
 
     /**
      * 生成订单号：BByyyyMMddXXXX。
+     *
+     * <p>使用 Redis INCR 保证跨重启的序号唯一性，生成后校验 DB 确保不重复。
+     * Key 格式：bb_order_seq:yyyyMMdd，首次使用时从数据库同步最大序号。
      */
     private String generateOrderNo() {
         String dateStr = LocalDateTime.now().format(ORDER_NO_DATE_FMT);
-        String key = "bb_order_seq_" + dateStr;
+        String key = ORDER_NO_KEY_PREFIX + dateStr;
 
-        long seq = dailySeqBase.computeIfAbsent(key, k -> orderSeq.get());
-        long currentSeq = orderSeq.incrementAndGet() - seq;
+        // 首次使用时：从数据库同步当前最大序号到 Redis
+        Long maxSeq = getMaxSeqFromDb(dateStr);
+        stringRedisTemplate.opsForValue()
+                .setIfAbsent(key, String.valueOf(maxSeq), Duration.ofDays(2));
 
-        return String.format("BB%s%04d", dateStr, currentSeq);
+        // 循环递增直到获取一个数据库中不存在的订单号
+        while (true) {
+            Long seq = stringRedisTemplate.opsForValue().increment(key);
+            long currentSeq = seq != null ? seq : maxSeq + 1;
+            String orderNo = String.format("BB%s%04d", dateStr, currentSeq);
+
+            // 校验：确保该订单号在数据库中不存在（兜底保障，处理历史数据和极端并发）
+            if (!orderNoExists(orderNo)) {
+                return orderNo;
+            }
+            log.warn("订单号已存在，跳过: orderNo={}", orderNo);
+        }
+    }
+
+    /**
+     * 检查订单号是否已存在于数据库。
+     */
+    private boolean orderNoExists(String orderNo) {
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxOrder::getOrderNo, orderNo);
+        return orderMapper.selectCount(wrapper) > 0;
+    }
+
+    /**
+     * 从数据库查询当日已有的最大订单号序号。
+     *
+     * @param dateStr 日期字符串 yyyyMMdd
+     * @return 当日最大序号，若无记录则返回 0
+     */
+    private Long getMaxSeqFromDb(String dateStr) {
+        String prefix = "BB" + dateStr;
+        LambdaQueryWrapper<BlindBoxOrder> wrapper = new LambdaQueryWrapper<>();
+        wrapper.likeRight(BlindBoxOrder::getOrderNo, prefix)
+                .orderByDesc(BlindBoxOrder::getOrderNo)
+                .last("LIMIT 1");
+        BlindBoxOrder lastOrder = orderMapper.selectOne(wrapper);
+        if (lastOrder == null) {
+            return 0L;
+        }
+        // 从订单号末尾提取 4 位序号
+        String lastOrderNo = lastOrder.getOrderNo();
+        try {
+            return Long.parseLong(lastOrderNo.substring(lastOrderNo.length() - 4));
+        } catch (NumberFormatException e) {
+            log.warn("解析订单号序号失败: orderNo={}", lastOrderNo);
+            return 0L;
+        }
     }
 
     private BlindBoxTemplate requireTemplate(Long id) {
