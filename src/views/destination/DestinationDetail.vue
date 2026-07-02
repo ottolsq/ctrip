@@ -31,7 +31,7 @@
           <el-col v-for="item in attractions" :key="item.id" :span="8">
             <div class="attraction-item" @click="showAttractionDetail(item)">
               <div class="attr-img-wrapper">
-                <el-image :src="item.coverUrl" fit="cover" class="attr-img">
+                <el-image :src="getAttractionFirstImage(item)" fit="cover" class="attr-img">
                   <template #error>
                     <div class="img-placeholder"><el-icon><Camera /></el-icon></div>
                   </template>
@@ -81,14 +81,18 @@
     </div>
 
     <!-- 景点详情弹窗 -->
-    <el-dialog v-model="attractionDialogVisible" :title="selectedAttraction?.name" width="600px" center>
+    <el-dialog v-model="attractionDialogVisible" :title="selectedAttraction?.name" width="700px" center>
       <div v-if="selectedAttraction" class="attraction-detail-modal">
-        <div class="modal-cover">
-          <el-image :src="selectedAttraction.coverUrl" fit="cover" class="modal-img">
-            <template #error>
-              <div class="img-placeholder-lg"><el-icon><Camera /></el-icon></div>
-            </template>
-          </el-image>
+        <div class="modal-carousel" v-if="getAttractionImages(selectedAttraction).length > 0">
+          <el-carousel :interval="4000" type="card" height="300px" indicator-position="outside">
+            <el-carousel-item v-for="(img, index) in getAttractionImages(selectedAttraction)" :key="index">
+              <el-image :src="img" fit="contain" class="modal-carousel-img">
+                <template #error>
+                  <div class="img-placeholder-lg"><el-icon><Camera /></el-icon></div>
+                </template>
+              </el-image>
+            </el-carousel-item>
+          </el-carousel>
         </div>
         <div class="modal-info">
           <el-descriptions :column="1" border>
@@ -130,6 +134,38 @@ const seasonMap = {
 function formatSeason(season) {
   if (!season) return '全年'
   return seasonMap[season] || '全年'
+}
+
+function getAttractionImages(item) {
+  let images = []
+  if (item.imageUrls) {
+    let parsedUrls = []
+    if (typeof item.imageUrls === 'string') {
+      try {
+        parsedUrls = JSON.parse(item.imageUrls)
+      } catch (e) {
+        console.warn('Failed to parse imageUrls:', e)
+      }
+    } else if (Array.isArray(item.imageUrls)) {
+      parsedUrls = item.imageUrls
+    }
+    if (Array.isArray(parsedUrls)) {
+      images = parsedUrls.filter(url => url && typeof url === 'string' && url.trim())
+    }
+  }
+  if (item.coverUrl && item.coverUrl.trim()) {
+    const cover = item.coverUrl.trim()
+    if (!images.includes(cover)) {
+      images.unshift(cover)
+    }
+  }
+  return images
+}
+
+function getAttractionFirstImage(item) {
+  const images = getAttractionImages(item)
+  if (images.length === 0) return ''
+  return images[0]
 }
 
 const loading = ref(true)
@@ -318,15 +354,14 @@ onMounted(async () => {
 
 /* 景点详情弹窗样式 */
 .attraction-detail-modal {
-  .modal-cover {
+  .modal-carousel {
     width: 100%;
-    height: 200px;
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 16px;
   }
 
-  .modal-img {
+  .modal-carousel-img {
     width: 100%;
     height: 100%;
   }
