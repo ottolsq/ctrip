@@ -22,6 +22,7 @@ import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
 import com.ctrip.blindbox.service.BlindBoxSchemeService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ForbiddenException;
 import com.ctrip.common.exception.ResourceNotFoundException;
@@ -69,6 +70,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final EventPublisher eventPublisher;
+    private final FlashSaleService flashSaleService;
 
     public BlindBoxOrderServiceImpl(BlindBoxOrderMapper orderMapper,
                                     BlindBoxTemplateMapper templateMapper,
@@ -79,7 +81,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                                     RedissonClient redissonClient,
                                     StringRedisTemplate stringRedisTemplate,
                                     ObjectMapper objectMapper,
-                                    EventPublisher eventPublisher) {
+                                    EventPublisher eventPublisher,
+                                    FlashSaleService flashSaleService) {
         this.orderMapper = orderMapper;
         this.templateMapper = templateMapper;
         this.resultMapper = resultMapper;
@@ -90,6 +93,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
+        this.flashSaleService = flashSaleService;
     }
 
     // ========== 订单创建 ==========
@@ -518,5 +522,59 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
             throw new ForbiddenException("无权查看他人订单");
         }
         return order;
+    }
+
+    // ========================================================================
+    // 定时任务：Redis ↔ MySQL 库存对账
+    // ========================================================================
+
+    /**
+     * 每小时对比 Redis 秒杀库存与 MySQL 库存，发现差异时以 MySQL 为准修正。
+     *
+     * <p>此任务在秒杀活动中起最终一致性兜底作用：
+     * <ul>
+     *   <li>Redis 库存因消费者失败回滚不完整等原因与 MySQL 偏差</li>
+     *   <li>定时对账自动发现并修正，避免超卖或库存残留</li>
+     * </ul>
+     *
+     * <p>仅检查活跃状态的限定盲盒模板。
+     */
+    @Scheduled(cron = "0 0 * * * ?")
+    @Transactional(readOnly = true)
+    public void reconcileStock() {
+        // 查询所有活跃的限定盲盒模板
+        LambdaQueryWrapper<BlindBoxTemplate> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BlindBoxTemplate::getType, BlindBoxType.LIMITED);
+        wrapper.eq(BlindBoxTemplate::getStatus, TemplateStatus.ACTIVE);
+        var templates = templateMapper.selectList(wrapper);
+
+        int reconciled = 0;
+        for (BlindBoxTemplate template : templates) {
+            // 获取 Redis 中的剩余库存（未预热的跳过）
+            int redisStock = flashSaleService.getRemainingStock(template.getId());
+            if (redisStock < 0) {
+                continue; // 未预热，跳过
+            }
+
+            // 获取 MySQL 中的库存
+            Integer mysqlStock = template.getStock();
+            if (mysqlStock == null) {
+                continue;
+            }
+
+            // 对比并修正
+            if (redisStock != mysqlStock) {
+                log.warn("库存不一致: templateId={}, redis={}, mysql={}",
+                        template.getId(), redisStock, mysqlStock);
+                // 以 MySQL 为准——数据库是最终真相源
+                flashSaleService.prewarmStock(
+                        template.getId(), mysqlStock, Duration.ofHours(48));
+                reconciled++;
+            }
+        }
+
+        if (reconciled > 0) {
+            log.info("库存对账完成，修正 {} 个模板", reconciled);
+        }
     }
 }

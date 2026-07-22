@@ -228,6 +228,32 @@ public class RabbitMQConfig {
         return QueueBuilder.durable(CONTENT_AUDIT_QUEUE).build();
     }
 
+    // ========== Flash Sale Exchange & Queue ==========
+
+    /** 秒杀订单 Exchange */
+    public static final String FLASH_SALE_EXCHANGE = "flash.sale.exchange";
+
+    /** 秒杀订单队列 */
+    public static final String FLASH_SALE_ORDER_QUEUE = "flash.sale.order.queue";
+
+    @Bean
+    public TopicExchange flashSaleExchange() {
+        return new TopicExchange(FLASH_SALE_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue flashSaleOrderQueue() {
+        return QueueBuilder.durable(FLASH_SALE_ORDER_QUEUE)
+                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", FLASH_SALE_ORDER_QUEUE + ".dlq")
+                .build();
+    }
+
+    @Bean
+    public Binding flashSaleOrderBinding(Queue flashSaleOrderQueue, TopicExchange flashSaleExchange) {
+        return BindingBuilder.bind(flashSaleOrderQueue).to(flashSaleExchange).with("#");
+    }
+
     @Bean
     public Binding contentAuditBinding(Queue contentAuditQueue, TopicExchange contentAuditExchange) {
         return BindingBuilder.bind(contentAuditQueue).to(contentAuditExchange).with("#");
