@@ -260,3 +260,24 @@ private boolean isValidMagicBytes(byte[] header, String ext) {
 | Bug | 原因 | 修复 |
 |-----|------|------|
 | `DELETE` 接口返回"非法路径" | `Path.startsWith()` 比较时，相对路径 `Path` 与绝对路径 `Path` 永远不匹配（Java NIO 语义）。原代码 `Path.of(uploadDir, relativePath).normalize()` 得到相对路径，无法通过 `startsWith(absolutePath)` 检查。 | 改为 `Path.of(uploadDir).toAbsolutePath().normalize().resolve(relativePath)` 确保 filePath 也是绝对路径后再比较。 |
+
+
+
+
+
+
+
+后端不需要区分。上传接口 POST /api/v1/uploads/image 不知道也不关心图片的用途——它只管：
+
+  接收文件 →校验 →存盘 →返回 URL
+
+  区分发生在下一步：
+
+  同一个上传接口                         不同的业务接口
+  ─────────────────────────────────────────────────────────────
+  POST /api/v1/uploads/image  → URL ─→PUT /api/v1/users/me/avatar     →头像
+                                      ─→POST /api/v1/guides            →攻略图片
+                                      ─→POST /api/v1/admin/destinations →目的地图片
+
+  就像文件系统里的 write() 函数——它只管把字节写到磁盘，不会问"你这 Word 文档还是 Excel
+  表格？"。上传接口就是通用的文件存取层，业务语义由调用方决定。
