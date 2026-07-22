@@ -684,11 +684,32 @@ curl -X POST "http://localhost:8080/api/v1/payments/blind-box/callback" \
 
 ### 开盒
 
-打开已支付的盲盒订单，生成旅行方案结果。
+打开已支付的盲盒订单，触发 AI 生成旅行方案。
+
+> **⚠️ 重要变更（2026-07）：开盒已改为异步流程。**
+> 调用此接口后，订单状态立即变为 `PROCESSING` 并返回，AI 方案在后台异步生成。
+> 前端需轮询订单直至状态变为 `OPENED`，详见下方异步开盒流程说明。
 
 - **URL**: `POST /api/v1/blind-box/orders/{orderNo}/open`
 - **认证**: 需要 JWT Token
-- **说明**: 幂等操作，已开盒的订单重复调用返回同一结果
+- **说明**: 幂等操作——已开盒返回已有结果，处理中返回当前状态
+
+#### 异步开盒流程
+
+```
+POST /open → 状态变为 PROCESSING → 立即返回 (HTTP 200)
+    ↓
+后台 MQ 消费者异步调用 AI 生成方案 (5-20s)
+    ↓
+状态变为 OPENED
+
+前端应每 2 秒轮询：
+  GET /orders/{orderNo} → status=PROCESSING → 展示"AI生成中..."
+                        → status=OPENED    → 展示完整结果
+                        → status=PAID      → 重试开盒（上次请求未成功）
+
+超时策略：30 秒后仍为 PROCESSING → 提示"方案生成中，请稍后刷新查看"
+```
 
 #### 路径参数
 
@@ -703,7 +724,23 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open"
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 ```
 
-#### 成功响应 (200)
+#### 成功响应 — 首次开盒（处理中）(200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "orderNo": "BB202606020001",
+    "templateId": 1,
+    "templateName": "日常旅行盲盒",
+    "payAmount": 99.00,
+    "status": "PROCESSING"
+  },
+  "error": null
+}
+```
+
+#### 成功响应 — 已开盒（幂等返回）(200)
 
 ```json
 {
@@ -742,13 +779,13 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open"
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | orderNo | string | 订单编号 |
-| resultId | number | 盲盒结果 ID |
-| destination | string | 目的地名称 |
-| destinationId | number | 目的地 ID |
-| theme | string | 旅行主题 |
-| resultText | object | 完整旅行方案 JSON（见 [resultText 结构说明](#resulttext-结构说明)） |
-| shareCode | string | 分享链接短码（6 位 Base62） |
-| openedAt | string | 开盒时间，ISO 8601 格式 |
+| status | string | 订单状态（首次开盒为 `PROCESSING`，已开盒为 `OPENED`） |
+| resultId | number | 盲盒结果 ID（仅 OPENED 状态返回） |
+| destination | string | 目的地名称（仅 OPENED 状态返回） |
+| theme | string | 旅行主题（仅 OPENED 状态返回） |
+| resultText | object | 完整旅行方案 JSON（仅 OPENED 状态返回，见 [resultText 结构说明](#resulttext-结构说明)） |
+| shareCode | string | 分享链接短码（仅 OPENED 状态返回，6 位 Base62） |
+| openedAt | string | 开盒时间（仅 OPENED 状态返回），ISO 8601 格式 |
 
 #### 失败响应
 
@@ -771,14 +808,7 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open"
 {
   "success": false,
   "data": null,
-  "error": "请先完成支付"
-}
-
-// 订单已开盒（幂等返回）(200)
-{
-  "success": true,
-  "data": { /* 已有结果，同上 */ },
-  "error": null
+  "error": "仅已支付订单可开盒"
 }
 ```
 
@@ -1340,6 +1370,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 |----|------|
 | PENDING | 待支付（创建后 15 分钟超时） |
 | PAID | 已支付，待开盒 |
+| PROCESSING | AI 方案生成中（异步开盒中间状态，前端应轮询等待） |
 | OPENED | 已开盒 |
 | REFUNDED | 已退款 |
 | CANCELLED | 已取消（超时未支付 / 用户主动取消） |

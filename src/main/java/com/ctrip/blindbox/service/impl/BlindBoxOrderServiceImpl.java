@@ -215,16 +215,36 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 order.getTemplateId(), order.getPayAmount(), order.getPayMethod(), null);
     }
 
-    // ========== 开盒 ==========
+    // ========== 开盒（第3轮重构：同步阶段 + MQ 异步 AI 生成） ==========
 
+    /**
+     * 发起开盒请求——同步阶段（毫秒级返回）。
+     *
+     * <p>第3轮重构：将 AI 方案生成从用户请求线程中移出，
+     * 改为通过 RabbitMQ 异步消费（见 {@code BlindBoxResultGenConsumer}）。
+     *
+     * <p>此方法仅做状态校验 + 状态更新 + 发送 MQ 消息，不再执行 AI 调用。
+     * 用户收到 PROCESSING 状态后应轮询订单直至 OPENED。
+     *
+     * <h3>幂等处理</h3>
+     * <ul>
+     *   <li>PAID → PROCESSING：首次请求，正常处理</li>
+     *   <li>OPENED → 直接返回缓存结果（幂等）</li>
+     *   <li>PROCESSING → 返回处理中状态（防止重复发送 MQ）</li>
+     * </ul>
+     *
+     * @param userId  用户 ID
+     * @param orderNo 订单号
+     * @return OrderResponse（status=PROCESSING 或 OPENED）
+     */
     @Override
     @Transactional
     public OrderResponse openBox(Long userId, String orderNo) {
         BlindBoxOrder order = requireOrder(orderNo, userId);
 
-        // 仅已支付可开盒
-        if (order.getStatus() != OrderStatus.PAID) {
-            throw new BusinessException("仅已支付订单可开盒");
+        // 仅已支付可开盒（PROCESSING 状态也允许进入——可能是前端轮询触发）
+        if (order.getStatus() != OrderStatus.PAID && order.getStatus() != OrderStatus.PROCESSING) {
+            throw new BusinessException("仅已支付订单可开盒，当前状态：" + order.getStatus());
         }
 
         // 获取分布式锁防止重复开盒
@@ -235,61 +255,35 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 throw new BusinessException("系统繁忙，请稍后重试");
             }
 
-            // 幂等检查：若已开盒，直接返回
+            // 锁内重查状态——check-lock-check 模式
             BlindBoxOrder refreshed = orderMapper.selectById(order.getId());
+
+            // 已开盒 → 幂等返回
             if (refreshed.getStatus() == OrderStatus.OPENED) {
                 log.info("开盒幂等返回: orderNo={}", orderNo);
                 BlindBoxTemplate template = templateMapper.selectById(refreshed.getTemplateId());
                 return OrderConverter.toResponse(refreshed, template);
             }
 
-            // 更新订单状态为 OPENED
-            LocalDateTime openedAt = LocalDateTime.now();
-            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
-                    .eq(BlindBoxOrder::getId, order.getId())
-                    .set(BlindBoxOrder::getStatus, OrderStatus.OPENED));
-
-            // 生成盲盒方案
-            BlindBoxPreference preference = preferenceService.getByOrderId(order.getId());
-            SchemeResponse scheme = schemeService.generateScheme(preference);
-
-            // 将方案序列化为 JSON
-            String resultText;
-            try {
-                resultText = objectMapper.writeValueAsString(scheme);
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException("序列化方案失败", e);
+            // 正在处理中 → 返回当前状态（防重复发MQ）
+            if (refreshed.getStatus() == OrderStatus.PROCESSING) {
+                log.info("开盒处理中，返回当前状态: orderNo={}", orderNo);
+                BlindBoxTemplate template = templateMapper.selectById(refreshed.getTemplateId());
+                return OrderConverter.toResponse(refreshed, template);
             }
 
-            // 保存结果
-            BlindBoxResult result = BlindBoxResult.builder()
-                    .orderId(order.getId())
-                    .destination(scheme.destination())
-                    .destinationId(scheme.destinationId())
-                    .theme(scheme.theme())
-                    .resultText(resultText)
-                    .openedAt(openedAt)
-                    .build();
-            resultMapper.insert(result);
+            // 首次请求：状态 PAID → PROCESSING
+            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+                    .eq(BlindBoxOrder::getId, order.getId())
+                    .set(BlindBoxOrder::getStatus, OrderStatus.PROCESSING));
 
-            log.info("开盒成功: orderNo={}, destination={}", orderNo, scheme.destination());
-
-            // 发布盲盒结果生成事件
+            // 发送 MQ 消息——BlindBoxResultGenConsumer 异步消费完成 AI 生成
             eventPublisher.publishBlindBoxOpenEvent(
-                    "BLINDBOX_RESULT_GENERATED", order.getId(), userId,
-                    result.getId(), Map.of(
-                            "destination", scheme.destination(),
-                            "destinationId", scheme.destinationId(),
-                            "theme", scheme.theme(),
-                            "days", scheme.days()
-                    ));
+                    "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
 
-            // 发布订单开盒状态事件
-            eventPublisher.publishOrderStatusEvent(
-                    "ORDER_OPENED", order.getId(), orderNo, userId,
-                    order.getTemplateId(), order.getPayAmount(), order.getPayMethod(), null);
+            log.info("开盒请求已提交: orderNo={}, userId={}", orderNo, userId);
 
-            // 返回更新后的订单
+            // 返回 PROCESSING 状态——前端应轮询至 OPENED
             BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
             return OrderConverter.toResponse(orderMapper.selectById(order.getId()), template);
 
