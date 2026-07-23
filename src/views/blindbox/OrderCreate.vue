@@ -182,6 +182,12 @@ const handleSubmit = async () => {
     }
   } catch (error) {
     console.error('[OrderCreate] handleSubmit error:', error)
+    const errorMsg = error.response?.data?.message || error.message || '订单创建失败'
+    if (errorMsg.includes('Duplicate entry') || errorMsg.includes('uk_order_no')) {
+      ElMessage.error('订单创建失败，订单号重复，请稍后重试')
+    } else {
+      ElMessage.error(errorMsg)
+    }
   } finally {
     submitLoading.value = false
   }

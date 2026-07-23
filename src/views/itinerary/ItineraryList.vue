@@ -192,19 +192,19 @@ onMounted(async () => {
 
 <style scoped>
 .itinerary-list {
-  padding: 0 10px;
+  padding: 10px 0 40px;
 
   .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
 
     h1 {
       margin: 0;
-      font-size: 22px;
-      font-weight: 600;
-      color: #303133;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-primary);
     }
   }
 
@@ -229,12 +229,15 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     margin-bottom: 20px;
-    border-radius: 12px;
+    border-radius: 16px;
     overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
 
     &:hover {
       transform: translateY(-6px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+      box-shadow: var(--shadow-md);
     }
   }
 
@@ -242,15 +245,15 @@ onMounted(async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
-    margin-bottom: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 16px;
 
     h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 600;
-      color: #303133;
+      color: var(--text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -260,21 +263,21 @@ onMounted(async () => {
   }
 
   .card-info {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     flex: 1;
   }
 
   .info-item {
     display: flex;
     align-items: center;
-    font-size: 13px;
-    color: #606266;
-    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
 
     .el-icon {
-      margin-right: 8px;
-      font-size: 14px;
-      color: #409eff;
+      margin-right: 10px;
+      font-size: 15px;
+      color: var(--primary-color);
     }
   }
 
@@ -282,31 +285,31 @@ onMounted(async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
     margin-top: auto;
   }
 
   .card-stats {
     display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: #909399;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--text-light);
 
     .el-icon {
-      margin-right: 4px;
+      margin-right: 6px;
     }
   }
 
   .card-actions {
     display: flex;
-    gap: 8px;
+    gap: 10px;
   }
 
   .pagination-wrapper {
     display: flex;
     justify-content: center;
-    margin-top: 32px;
+    margin-top: 40px;
     padding-bottom: 24px;
   }
 }

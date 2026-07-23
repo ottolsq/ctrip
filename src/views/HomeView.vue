@@ -174,10 +174,52 @@ onMounted(async () => {
 
 /* Banner */
 .banner-carousel {
-  border-radius: 12px;
+  border-radius: 20px;
   overflow: hidden;
   margin-bottom: 32px;
-  height: 380px;
+  height: 400px;
+  box-shadow: 0 8px 32px rgba(64, 158, 255, 0.15);
+  background: transparent;
+}
+
+.banner-carousel :deep(.el-carousel__container) {
+  height: 100%;
+  background: transparent;
+}
+
+.banner-carousel :deep(.el-carousel__indicators) {
+  margin-bottom: 20px;
+  background: transparent;
+  display: flex;
+  gap: 6px;
+}
+
+.banner-carousel :deep(.el-carousel__indicator) {
+  margin: 0;
+  padding: 0;
+  border: none;
+  width: 20px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.banner-carousel :deep(.el-carousel__indicator.is-active) {
+  width: 32px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.banner-carousel :deep(.el-carousel__indicator::before) {
+  display: none;
+}
+
+.banner-carousel :deep(.el-carousel__button) {
+  display: none;
+}
+
+.banner-carousel :deep(.el-carousel__item) {
+  background: transparent;
 }
 
 .banner-item {
@@ -190,20 +232,36 @@ onMounted(async () => {
 .banner-content {
   text-align: center;
   color: #fff;
+  animation: fadeInUp 0.6s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .banner-content h2 {
-  font-size: 42px;
+  font-size: 44px;
   font-weight: 700;
   margin-bottom: 16px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #fff 0%, #e6f3ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .banner-content p {
   font-size: 18px;
   opacity: 0.95;
   margin-bottom: 28px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* 快捷入口 */
@@ -215,28 +273,36 @@ onMounted(async () => {
 }
 
 .section-card {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
-  min-height: 200px;
+  min-height: 220px;
+  position: relative;
+}
+
+.section-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
 }
 
 .section-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  transform: translateY(-8px);
+  box-shadow: 0 16px 40px rgba(64, 158, 255, 0.2);
 }
 
 .blind-box-card {
-  background: linear-gradient(135deg, #f5af19, #f12711);
+  background: linear-gradient(135deg, #409eff, #66b1ff);
 }
 
 .guide-card {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #72c1ff, #9fd6ff);
 }
 
 .itinerary-card {
-  background: linear-gradient(135deg, #11998e, #38ef7d);
+  background: linear-gradient(135deg, #a5d8ff, #c7e4ff);
 }
 
 .bb-card-inner {
@@ -244,14 +310,16 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 36px 20px;
+  padding: 40px 20px;
   color: #fff;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .bb-card-inner h3 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   margin: 16px 0 8px;
   color: #fff;
 }
@@ -259,7 +327,7 @@ onMounted(async () => {
 .bb-card-inner p {
   font-size: 14px;
   opacity: 0.9;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .card-actions {
@@ -277,56 +345,73 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .section-header h2 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-primary);
   position: relative;
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .section-header h2::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 4px;
-  bottom: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 4px;
-  background: #409eff;
+  height: 24px;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-light) 100%);
   border-radius: 2px;
 }
 
 .section-more {
   font-size: 14px;
-  color: #409eff;
+  color: var(--primary-color);
   text-decoration: none;
+  padding: 6px 16px;
+  border-radius: 20px;
+  transition: all var(--transition-fast);
 }
 
 .section-more:hover {
-  text-decoration: underline;
+  background: rgba(64, 158, 255, 0.1);
+  text-decoration: none;
 }
 
 /* 目的地卡片 */
 .destination-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-card);
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .destination-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
 .dest-img-wrapper {
-  height: 160px;
+  height: 170px;
   overflow: hidden;
+  position: relative;
+}
+
+.dest-img-wrapper::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to top, rgba(255,255,255,0.9) 0%, transparent 100%);
 }
 
 .dest-img {
@@ -335,41 +420,53 @@ onMounted(async () => {
 }
 
 .dest-info {
-  padding: 14px;
+  padding: 16px;
 }
 
 .dest-info h3 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 6px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
 }
 
 .dest-info p {
   font-size: 13px;
-  color: #999;
-  line-height: 1.5;
+  color: var(--text-muted);
+  line-height: 1.6;
   margin: 0;
 }
 
 /* 攻略卡片 */
 .guide-card-h {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-card);
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .guide-card-h:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
 .guide-img-wrapper {
-  height: 180px;
+  height: 190px;
   overflow: hidden;
+  position: relative;
+}
+
+.guide-img-wrapper::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to top, rgba(255,255,255,0.95) 0%, transparent 100%);
 }
 
 .guide-img {
@@ -382,9 +479,9 @@ onMounted(async () => {
 }
 
 .guide-info h3 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -393,8 +490,8 @@ onMounted(async () => {
 
 .guide-info p {
   font-size: 13px;
-  color: #999;
-  line-height: 1.5;
+  color: var(--text-muted);
+  line-height: 1.6;
   margin-bottom: 12px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -406,7 +503,7 @@ onMounted(async () => {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #bbb;
+  color: var(--text-light);
 }
 
 .guide-meta span {
@@ -420,7 +517,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--bg-secondary);
+  color: var(--primary-color);
 }
 </style>

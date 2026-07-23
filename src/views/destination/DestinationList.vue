@@ -117,52 +117,66 @@ onMounted(() => {
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 .page-header h2 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  color: #333;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
 }
 
 .page-header p {
-  font-size: 14px;
-  color: #999;
+  font-size: 15px;
+  color: var(--text-muted);
 }
 
 .filter-bar {
   display: flex;
-  gap: 12px;
-  margin-bottom: 28px;
+  gap: 16px;
+  margin-bottom: 32px;
+  justify-content: center;
 }
 
 .search-input {
-  width: 360px;
+  width: 400px;
 }
 
 .dest-col {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .destination-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-card);
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .destination-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
 .dest-img-wrapper {
   height: 180px;
   overflow: hidden;
+  position: relative;
+}
+
+.dest-img-wrapper::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to top, rgba(255,255,255,0.9) 0%, transparent 100%);
 }
 
 .dest-img {
@@ -175,23 +189,27 @@ onMounted(() => {
 }
 
 .dest-info h3 {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .dest-info p {
-  font-size: 13px;
-  color: #999;
-  line-height: 1.5;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
   margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
-  margin-top: 32px;
+  margin-top: 40px;
 }
 
 .img-placeholder {
@@ -199,7 +217,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--bg-secondary);
+  color: var(--primary-color);
 }
 </style>

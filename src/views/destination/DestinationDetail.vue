@@ -214,56 +214,85 @@ onMounted(async () => {
 }
 
 .hero-section {
-  border-radius: 12px;
-  padding: 60px 40px;
-  margin-bottom: 24px;
+  border-radius: 20px;
+  padding: 70px 40px;
+  margin-bottom: 32px;
   color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, transparent 50%);
+}
+
+.hero-text {
+  position: relative;
+  z-index: 1;
 }
 
 .hero-text h2 {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .hero-text p {
-  font-size: 16px;
-  opacity: 0.9;
-  line-height: 1.6;
+  font-size: 17px;
+  opacity: 0.95;
+  line-height: 1.7;
 }
 
 .info-card {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  border-radius: 16px;
 }
 
 .section-card {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  border-radius: 16px;
 }
 
 .section-card h3 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .attraction-item {
-  background: #fafafa;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: 12px;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s;
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .attraction-item:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  background: #fff;
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
 .attr-img-wrapper {
-  height: 140px;
+  height: 150px;
   overflow: hidden;
+  position: relative;
+}
+
+.attr-img-wrapper::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(to top, rgba(255,255,255,0.9) 0%, transparent 100%);
 }
 
 .attr-img {
@@ -272,41 +301,48 @@ onMounted(async () => {
 }
 
 .attr-info {
-  padding: 12px;
+  padding: 14px;
 }
 
 .attr-info h4 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 4px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
 }
 
 .attr-info p {
-  font-size: 12px;
-  color: #999;
+  font-size: 13px;
+  color: var(--text-muted);
   margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .guide-item {
   display: flex;
-  gap: 12px;
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 12px;
+  gap: 14px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 14px;
   cursor: pointer;
-  transition: background 0.2s;
-  margin-bottom: 12px;
+  transition: all 0.3s;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .guide-item:hover {
-  background: #f0f5ff;
+  background: var(--bg-light);
+  transform: translateY(-2px);
 }
 
 .guide-item-img {
-  width: 80px;
-  height: 60px;
-  border-radius: 6px;
+  width: 90px;
+  height: 65px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -324,23 +360,23 @@ onMounted(async () => {
 }
 
 .guide-item-info h4 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #333;
-  margin: 0 0 4px;
+  color: var(--text-primary);
+  margin: 0 0 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .guide-author {
-  font-size: 12px;
-  color: #999;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .empty-state {
   text-align: center;
-  padding: 60px 0;
+  padding: 80px 0;
 }
 
 .img-placeholder {
@@ -348,17 +384,17 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--bg-secondary);
+  color: var(--primary-color);
 }
 
 /* 景点详情弹窗样式 */
 .attraction-detail-modal {
   .modal-carousel {
     width: 100%;
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
   }
 
   .modal-carousel-img {

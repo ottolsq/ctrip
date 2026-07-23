@@ -76,41 +76,63 @@ const handleAvatarUpload = async (file) => {
 
 <style scoped>
 .user-sidebar {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .user-avatar-section {
   text-align: center;
-  padding: 32px 20px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 40px 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.05) 0%, transparent 100%);
 }
 
 .user-avatar-section .el-avatar {
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
 }
 
 .user-avatar-section .el-avatar:hover {
-  opacity: 0.8;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.25);
 }
 
 .avatar-tip {
-  font-size: 12px;
-  color: #999;
-  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
 }
 
 .user-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  margin-top: 12px;
-  color: #333;
+  margin-top: 14px;
+  color: var(--text-primary);
 }
 
 .user-menu {
   border-right: none;
+}
+
+.user-menu .el-menu-item {
+  color: var(--text-secondary);
+  font-size: 14px;
+  transition: all 0.2s;
+  margin: 4px 8px;
+  border-radius: 8px;
+}
+
+.user-menu .el-menu-item:hover {
+  background: rgba(64, 158, 255, 0.08);
+  color: var(--primary-color);
+}
+
+.user-menu .el-menu-item.is-active {
+  background: rgba(64, 158, 255, 0.12);
+  color: var(--primary-color);
 }
 </style>

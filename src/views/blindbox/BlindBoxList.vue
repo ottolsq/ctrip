@@ -135,45 +135,47 @@ onMounted(() => {
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 .page-header h2 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  color: #333;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
 }
 
 .page-header p {
-  font-size: 14px;
-  color: #999;
+  font-size: 15px;
+  color: var(--text-muted);
 }
 
 .filter-bar {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .blindbox-col {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .blindbox-card {
-  background: #fff;
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 16px;
   overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.08);
+  border: 1px solid rgba(64, 158, 255, 0.15);
 }
 
 .blindbox-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
 }
 
 .card-cover {
   position: relative;
-  height: 200px;
+  height: 220px;
   overflow: hidden;
   cursor: pointer;
 }
@@ -185,17 +187,17 @@ onMounted(() => {
 
 .card-tag {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 16px;
+  left: 16px;
   color: #fff;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .card-tag.daily {
-  background: linear-gradient(135deg, #409eff, #667eea);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
 }
 
 .card-tag.limited {
@@ -205,10 +207,10 @@ onMounted(() => {
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4);
+    box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(255, 107, 107, 0);
+    box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
@@ -216,14 +218,14 @@ onMounted(() => {
 }
 
 .card-body {
-  padding: 18px;
+  padding: 20px;
 }
 
 .card-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: 10px;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,19 +233,19 @@ onMounted(() => {
 }
 
 .card-title:hover {
-  color: #409eff;
+  color: var(--primary-color);
 }
 
 .card-desc {
-  font-size: 13px;
-  color: #999;
-  line-height: 1.5;
-  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 18px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 39px;
+  min-height: 44px;
 }
 
 .card-footer {
@@ -259,28 +261,28 @@ onMounted(() => {
 }
 
 .price-symbol {
-  font-size: 14px;
-  color: #ff6b6b;
+  font-size: 15px;
+  color: var(--danger-color);
   font-weight: 600;
 }
 
 .price-value {
-  font-size: 22px;
-  color: #ff6b6b;
+  font-size: 24px;
+  color: var(--danger-color);
   font-weight: 700;
 }
 
 .price-original {
-  font-size: 13px;
-  color: #ccc;
+  font-size: 14px;
+  color: var(--text-light);
   text-decoration: line-through;
-  margin-left: 4px;
+  margin-left: 6px;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
-  margin-top: 32px;
+  margin-top: 40px;
 }
 
 .img-placeholder {
@@ -288,7 +290,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: linear-gradient(135deg, #e8f4ff 0%, #f0f8ff 100%);
+  color: var(--primary-color);
 }
 </style>

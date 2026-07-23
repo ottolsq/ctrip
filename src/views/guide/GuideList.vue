@@ -164,59 +164,62 @@ onMounted(() => {
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 .page-header h2 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  color: #333;
-  margin-bottom: 8px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
 }
 
 .page-header p {
-  font-size: 14px;
-  color: #999;
+  font-size: 15px;
+  color: var(--text-muted);
 }
 
 .filter-bar {
   display: flex;
-  gap: 12px;
-  margin-bottom: 28px;
+  gap: 16px;
+  margin-bottom: 32px;
+  justify-content: center;
 }
 
 .search-input {
-  width: 320px;
+  width: 360px;
 }
 
 .sort-select {
-  width: 140px;
+  width: 150px;
 }
 
 .guide-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .guide-card {
   display: flex;
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-card);
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .guide-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
 }
 
 .guide-left {
-  width: 220px;
-  min-height: 150px;
+  width: 240px;
+  min-height: 160px;
   flex-shrink: 0;
 }
 
@@ -228,16 +231,16 @@ onMounted(() => {
 
 .guide-right {
   flex: 1;
-  padding: 20px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
 }
 
 .guide-title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 10px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -245,28 +248,28 @@ onMounted(() => {
 
 .guide-summary {
   font-size: 14px;
-  color: #888;
-  line-height: 1.6;
+  color: var(--text-muted);
+  line-height: 1.7;
   flex: 1;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .guide-meta {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
   font-size: 13px;
-  color: #aaa;
+  color: var(--text-light);
 }
 
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .meta-date {
@@ -276,15 +279,15 @@ onMounted(() => {
 .pagination-wrapper {
   display: flex;
   justify-content: center;
-  margin-top: 32px;
+  margin-top: 40px;
 }
 
 .img-placeholder {
-  height: 150px;
+  height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--bg-secondary);
+  color: var(--primary-color);
 }
 </style>
