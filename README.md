@@ -1,11 +1,6 @@
-# 趣行旅行平台（前后端合并仓库）
+# 趣行旅行平台
 
 面向年轻人的社交化旅游 Web 平台，采用"内容种草 → 智能规划 → 盲盒探索"的业务闭环。
-
-- `ctrip-backend/`：Java 后端服务（原 `ottolsq/ctrip`）
-- `ctrip-frontend/`：Vue 3 前端应用（原 `ottolsq/ctrip-frontend`）
-
-两个仓库通过 `git subtree` 合并，保留各自完整提交历史。
 
 ---
 
@@ -132,8 +127,3 @@ npm run dev
 - `other/`：详细方案设计、测试方案、项目亮点
 
 ---
-
-## 历史来源
-
-- 后端原仓库：[github.com/ottolsq/ctrip](https://github.com/ottolsq/ctrip)
-- 前端原仓库：[github.com/ottolsq/ctrip-frontend](https://github.com/ottolsq/ctrip-frontend)
