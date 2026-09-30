@@ -97,20 +97,21 @@ public class EventPublisher {
     }
 
     /**
-     * 向指定 Exchange 发布事件，失败时区分错误类型处理。
+     * 向指定 Exchange 发布事件。
+     *
+     * <p>连接失败时抛出 RuntimeException，使调用方事务回滚（防止订单卡在 PROCESSING 状态）。
+     * 其他异常（如序列化失败）同样抛出，因为消息未发出意味着后续异步流程无法完成。
      */
     private void publish(String exchange, String routingKey, Object event) {
         try {
             rabbitTemplate.convertAndSend(exchange, routingKey, event);
             log.info("发布事件: exchange={}, routingKey={}", exchange, routingKey);
         } catch (AmqpConnectException e) {
-            // 连接问题 — 记录错误，可能是 RabbitMQ 暂时不可用
-            log.error("RabbitMQ 连接失败: exchange={}, routingKey={}, error={}",
-                    exchange, routingKey, e.getMessage());
+            log.error("RabbitMQ 连接失败: exchange={}, routingKey={}", exchange, routingKey, e);
+            throw new RuntimeException("消息队列不可用，请稍后重试", e);
         } catch (Exception e) {
-            // 其他异常 — 降级为日志，不阻塞主流程
-            log.warn("发布事件失败: exchange={}, routingKey={}, error={}",
-                    exchange, routingKey, e.getMessage());
+            log.error("发布事件失败: exchange={}, routingKey={}", exchange, routingKey, e);
+            throw new RuntimeException("事件发布失败", e);
         }
     }
 

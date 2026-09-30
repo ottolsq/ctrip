@@ -8,6 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -87,7 +88,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/blind-box").permitAll()
                 .requestMatchers("/api/v1/blind-box/share/**").permitAll()
                 .requestMatchers("/api/v1/payments/blind-box/**").permitAll()
-                .requestMatchers("/api/v1/blind-box/{id}").permitAll()
+                // 模板详情仅 GET + 数字ID 公开（正则避免 /my、/orders 被误匹配为公开）
+                .requestMatchers(HttpMethod.GET, "/api/v1/blind-box/{id:\\d+}").permitAll()
                 .requestMatchers("/api/v1/itineraries/share/**").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "CONTENT_OPERATOR")
                 .anyRequest().authenticated()
