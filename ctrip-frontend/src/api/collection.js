@@ -24,3 +24,17 @@ export function collectGuide(guideId) {
 export function uncollectGuide(guideId) {
   return request.delete(`/v1/guides/${guideId}/collect`)
 }
+
+/**
+ * 查询收藏状态
+ */
+export function getCollectionStatus(targetType, targetId) {
+  return request.get('/v1/collections/status', { params: { targetType, targetId } })
+}
+
+/**
+ * 取消收藏任意目标（攻略/行程）
+ */
+export function uncollectTarget(targetType, targetId) {
+  return request.delete(`/v1/collections/${targetType}/${targetId}`)
+}

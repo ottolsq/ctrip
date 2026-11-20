@@ -98,7 +98,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, Clock, User, Delete } from '@element-plus/icons-vue'
 import UserSidebar from '@/components/common/UserSidebar.vue'
-import { getCollections, uncollectGuide } from '@/api/collection'
+import { getCollections, uncollectTarget } from '@/api/collection'
 
 const router = useRouter()
 
@@ -142,9 +142,9 @@ function formatDate(dateStr) {
 
 function goToDetail(item) {
   if (item.contentType === 'GUIDE') {
-    router.push(`/guides/${item.contentId || item.guideId || item.id}`)
+    router.push(`/guides/${item.contentId}`)
   } else if (item.contentType === 'ITINERARY') {
-    router.push(`/itineraries/${item.contentId || item.itineraryId || item.id}`)
+    router.push(`/itineraries/${item.contentId}`)
   }
 }
 
@@ -160,8 +160,7 @@ async function handleUncollect(item) {
   }
 
   try {
-    const contentId = item.contentId || item.guideId || item.id
-    await uncollectGuide(contentId)
+    await uncollectTarget(item.contentType, item.contentId)
     ElMessage.success('已取消收藏')
     loadCollections()
   } catch (e) {

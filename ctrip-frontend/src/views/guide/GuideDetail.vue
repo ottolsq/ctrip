@@ -147,6 +147,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getGuide, deleteGuide, likeGuide, unlikeGuide } from '@/api/guide'
+import { collectGuide, uncollectGuide, getCollectionStatus } from '@/api/collection'
 import { getComments, createComment, deleteComment } from '@/api/comment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Star, Delete, Clock } from '@element-plus/icons-vue'
@@ -205,6 +206,15 @@ async function loadGuide() {
   try {
     const res = await getGuide(id)
     guide.value = res.data
+    guide.value.isCollected = false
+    if (userStore.isLoggedIn) {
+      try {
+        const statusRes = await getCollectionStatus('GUIDE', id)
+        guide.value.isCollected = statusRes.data?.collected === true
+      } catch {
+        // 收藏状态查询失败不阻断详情展示
+      }
+    }
   } catch {
     guide.value = null
   }
@@ -245,11 +255,22 @@ async function handleToggleLike() {
 async function handleToggleCollect() {
   if (!userStore.isLoggedIn) {
     ElMessage.warning('请先登录')
-    router.push('/login')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
-  guide.value.isCollected = !guide.value.isCollected
-  ElMessage.success(guide.value.isCollected ? '已收藏' : '已取消收藏')
+  try {
+    if (guide.value.isCollected) {
+      await uncollectGuide(guide.value.id)
+      guide.value.isCollected = false
+      ElMessage.success('已取消收藏')
+    } else {
+      await collectGuide(guide.value.id)
+      guide.value.isCollected = true
+      ElMessage.success('已收藏')
+    }
+  } catch {
+    // 错误已由请求拦截器提示
+  }
 }
 
 async function handleDelete() {
