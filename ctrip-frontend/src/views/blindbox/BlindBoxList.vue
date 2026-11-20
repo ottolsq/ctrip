@@ -36,13 +36,16 @@
           </div>
           <div class="card-body">
             <h3 class="card-title" @click="goToDetail(item.id)">{{ item.name }}</h3>
-            <p class="card-desc">{{ item.description || '暂无描述' }}</p>
+            <p class="card-desc">{{ getRuleDescription(item) || '暂无描述' }}</p>
             <div class="card-footer">
               <div class="price-wrapper">
                 <span class="price-symbol">¥</span>
                 <span class="price-value">{{ item.price }}</span>
                 <span class="price-original" v-if="item.originalPrice">¥{{ item.originalPrice }}</span>
               </div>
+              <span v-if="item.type === 'LIMITED' && item.stock >= 0" class="stock-text">
+                剩余 {{ item.stock }} 份
+              </span>
               <el-button type="primary" size="small" @click="goToDetail(item.id)">
                 立即购买
               </el-button>
@@ -87,6 +90,19 @@ const pagination = reactive({
   current: 1,
   pageSize: 9
 })
+
+function parseRuleConfig(raw) {
+  if (!raw) return {}
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch {
+    return {}
+  }
+}
+
+function getRuleDescription(item) {
+  return parseRuleConfig(item?.ruleConfig).description || ''
+}
 
 async function loadData() {
   loading.value = true
@@ -277,6 +293,13 @@ onMounted(() => {
   color: var(--text-light);
   text-decoration: line-through;
   margin-left: 6px;
+}
+
+.stock-text {
+  font-size: 12px;
+  color: var(--danger-color);
+  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .pagination-wrapper {

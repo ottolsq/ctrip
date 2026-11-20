@@ -33,18 +33,33 @@
 
               <div class="desc-section">
                 <h4>简介</h4>
-                <p class="description">{{ template.description || '暂无描述' }}</p>
+                <p class="description">{{ rule.description || '暂无描述' }}</p>
+              </div>
+
+              <div v-if="isLimited" class="limited-info">
+                <div class="info-row">
+                  <span class="info-label">剩余库存</span>
+                  <span>{{ template.stock }} 份</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">活动时间</span>
+                  <span>{{ formatDateTime(rule.activityStartTime) }} ~ {{ formatDateTime(rule.activityEndTime) }}</span>
+                </div>
               </div>
 
               <div class="rules-section">
                 <h4>规则说明</h4>
-                <div class="rules-content" v-html="template.rules || '暂无规则说明'"></div>
+                <div class="rules-content">
+                  <p v-if="rule.description">{{ rule.description }}</p>
+                  <p v-if="isLimited">活动期间限量供应，售罄即止。</p>
+                  <p v-if="!rule.description && !isLimited">暂无规则说明</p>
+                </div>
               </div>
 
               <div class="action-section">
-                <el-button type="primary" size="large" class="buy-btn" @click="handleBuy">
+                <el-button type="primary" size="large" class="buy-btn" :disabled="soldOut" @click="handleBuy">
                   <el-icon><ShoppingCart /></el-icon>
-                  立即购买
+                  {{ soldOut ? '已售罄' : '立即购买' }}
                 </el-button>
               </div>
             </div>
@@ -56,7 +71,7 @@
         <template #header>
           <h3>详细介绍</h3>
         </template>
-        <div class="detail-content-inner" v-html="template.detail || template.description || '暂无详细介绍'"></div>
+        <div class="detail-content-inner">{{ rule.description || '暂无详细介绍' }}</div>
       </el-card>
     </div>
 
@@ -68,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getBlindBoxTemplate } from '@/api/blindbox'
 import { ArrowLeft, Picture, ShoppingCart } from '@element-plus/icons-vue'
@@ -80,7 +95,30 @@ const router = useRouter()
 const loading = ref(true)
 const template = ref(null)
 
+function parseRuleConfig(raw) {
+  if (!raw) return {}
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch {
+    return {}
+  }
+}
+
+const rule = computed(() => parseRuleConfig(template.value?.ruleConfig))
+const isLimited = computed(() => template.value?.type === 'LIMITED')
+const soldOut = computed(() => isLimited.value && Number(template.value?.stock ?? -1) <= 0)
+
+function formatDateTime(value) {
+  if (!value) return '未配置'
+  const date = new Date(value)
+  if (isNaN(date.getTime())) return '未配置'
+  const pad = n => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 function handleBuy() {
+  if (soldOut.value) return
   router.push(`/blind-box/${route.params.id}/order`)
 }
 
@@ -225,6 +263,36 @@ onMounted(async () => {
   padding: 12px;
   background: #f5f7fa;
   border-radius: 6px;
+}
+
+.rules-content p {
+  margin: 0 0 6px 0;
+}
+
+.rules-content p:last-child {
+  margin-bottom: 0;
+}
+
+.limited-info {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #fff1f0;
+  border-radius: 6px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #606266;
+}
+
+.info-row + .info-row {
+  margin-top: 8px;
+}
+
+.info-label {
+  color: #909399;
 }
 
 .action-section {
