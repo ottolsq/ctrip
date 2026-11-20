@@ -267,13 +267,13 @@
 3. 校验行程状态为 PUBLISHED（未发布的行程不可分享）
 4. 生成 6 位 Base62 随机短码（去重校验）
 5. 更新行程的 `shareCode` 和 `shareExpiresAt`（默认 7 天过期）
-6. 返回分享链接：`/api/v1/share/{shareCode}`
+6. 返回分享链接：`/api/v1/itineraries/share/{shareCode}`
 
 **关键代码位置：** `ItineraryShareServiceImpl.generateShareLink()`
 
 ---
 
-### 2. 查看分享行程 (`GET /api/v1/share/{shareCode}`)
+### 2. 查看分享行程 (`GET /api/v1/itineraries/share/{shareCode}`)
 
 **流程：**
 
@@ -329,7 +329,7 @@
 |------|-----|------|
 | DRAFT | 0 | 草稿，仅创建者可见 |
 | PUBLISHED | 1 | 已发布，他人可查看 |
-| ARCHIVED | 2 | 已归档，只读不可编辑 |
+| ARCHIVED | 2 | 已归档，禁止内容编辑；可重新发布 |
 
 ---
 
@@ -621,7 +621,7 @@ private void validateDates(LocalDate start, LocalDate end) {
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
 | POST | `/api/v1/itineraries/{id}/share` | JWT | 生成分享链接 |
-| GET | `/api/v1/share/{shareCode}` | 无需 | 查看分享行程（只读） |
+| GET | `/api/v1/itineraries/share/{shareCode}` | 无需 | 查看分享行程（只读） |
 | DELETE | `/api/v1/itineraries/{id}/share` | JWT | 取消分享 |
 
 ---

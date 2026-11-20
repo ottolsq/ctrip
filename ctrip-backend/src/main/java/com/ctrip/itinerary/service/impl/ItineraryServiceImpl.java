@@ -132,8 +132,8 @@ public class ItineraryServiceImpl implements ItineraryService {
         Itinerary itinerary = requireItinerary(id);
         checkOwner(itinerary, userId);
 
-        // 已归档的行程不允许修改
-        if (itinerary.getStatus() == ItineraryStatus.ARCHIVED) {
+        // 已归档的行程禁止内容编辑；仅允许“重新发布”这一状态变更
+        if (itinerary.getStatus() == ItineraryStatus.ARCHIVED && !isStatusOnlyRepublish(request)) {
             throw new ForbiddenException("已归档的行程不可修改");
         }
 
@@ -471,6 +471,14 @@ public class ItineraryServiceImpl implements ItineraryService {
                         .orderByAsc(ItineraryItem::getSortOrder)
         ).stream().map(ItineraryConverter::toItemResponse).toList();
         return ItineraryConverter.toDayResponse(day, itemResponses);
+    }
+
+    private boolean isStatusOnlyRepublish(UpdateItineraryRequest request) {
+        return "PUBLISHED".equals(request.status())
+                && request.title() == null
+                && request.destinationId() == null
+                && request.startDate() == null
+                && request.endDate() == null;
     }
 
     private void validateDates(LocalDate start, LocalDate end) {

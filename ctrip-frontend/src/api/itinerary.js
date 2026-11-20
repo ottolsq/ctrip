@@ -106,7 +106,7 @@ export function shareItinerary(id) {
  * 查看分享行程（公开）
  */
 export function getSharedItinerary(code) {
-  return request.get(`/v1/share/${code}`)
+  return request.get(`/v1/itineraries/share/${code}`)
 }
 
 /**

@@ -398,6 +398,8 @@ curl -X GET "http://localhost:8080/api/v1/itineraries?page=1&limit=10&status=DRA
   "error": "已归档的行程不可修改"
 }
 
+> 例外：仅将 `status` 改为 `PUBLISHED`（重新发布）的状态更新允许执行；内容字段不可修改。
+
 // 无权操作他人行程 (403)
 {
   "success": false,
@@ -879,7 +881,7 @@ curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
 |----|------|
 | DRAFT | 草稿，仅创建者可见和编辑 |
 | PUBLISHED | 已发布，他人可查看 |
-| ARCHIVED | 已归档，只读不可编辑 |
+| ARCHIVED | 已归档，禁止内容编辑；可重新发布 |
 
 ### 行程项类型枚举
 
@@ -940,5 +942,5 @@ curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
 | POST | `/api/v1/itineraries/{id}/share` | JWT | 生成分享链接 |
-| GET | `/api/v1/share/{shareCode}` | 无需 | 查看分享行程（只读公开） |
+| GET | `/api/v1/itineraries/share/{shareCode}` | 无需 | 查看分享行程（只读公开） |
 | DELETE | `/api/v1/itineraries/{id}/share` | JWT | 取消分享 |

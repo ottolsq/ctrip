@@ -117,7 +117,7 @@
 
 **分享接口**:
 - `POST /api/v1/itineraries/{id}/share` - 生成分享链接
-- `GET /api/v1/share/{shareCode}` - 查看分享行程（公开）
+- `GET /api/v1/itineraries/share/{shareCode}` - 查看分享行程（公开）
 - `DELETE /api/v1/itineraries/{id}/share` - 取消分享
 
 ### 2.4 盲盒模块（Phase 4）
@@ -728,7 +728,7 @@ POST /api/v1/itineraries            # 创建行程
 GET  /api/v1/itineraries            # 我的行程
 GET  /api/v1/itineraries/:id        # 行程详情
 POST /api/v1/itineraries/:id/share  # 分享行程
-GET  /api/v1/share/:code            # 查看分享
+GET  /api/v1/itineraries/share/:code            # 查看分享
 ```
 
 ### 盲盒相关

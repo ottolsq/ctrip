@@ -162,7 +162,7 @@
 | 任务 | 接口 | 说明 |
 |------|------|------|
 | 生成分享链接 | `POST /api/v1/itineraries/{id}/share` | 生成只读公开链接（短码） |
-| 查看分享行程 | `GET /api/v1/share/{shareCode}` | 无需登录，只读 |
+| 查看分享行程 | `GET /api/v1/itineraries/share/{shareCode}` | 无需登录，只读 |
 | 取消分享 | `DELETE /api/v1/itineraries/{id}/share` | 使分享链接失效 |
 
 ### 3.5 技术要点

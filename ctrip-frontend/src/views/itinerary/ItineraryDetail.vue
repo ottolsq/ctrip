@@ -38,7 +38,7 @@
             <el-button v-else-if="itinerary.status === 'PUBLISHED'" type="warning" @click="handleStatusChange('ARCHIVED')">归档</el-button>
             <el-button v-else type="success" @click="handleStatusChange('PUBLISHED')">重新发布</el-button>
             <el-button v-if="itinerary.status === 'PUBLISHED'" icon="Share" @click="handleShare">分享</el-button>
-            <el-button icon="Edit" type="primary" @click="router.push(`/itineraries/${itinerary.id}/edit`)">编辑</el-button>
+            <el-button v-if="itinerary.status !== 'ARCHIVED'" icon="Edit" type="primary" @click="router.push(`/itineraries/${itinerary.id}/edit`)">编辑</el-button>
           </template>
           <el-button
             v-if="!isShare && !isOwner && userStore.isLoggedIn"
@@ -271,7 +271,8 @@ async function handleToggleCollect() {
 async function handleShare() {
   try {
     const res = await shareItinerary(itinerary.value.id)
-    shareLink.value = `${window.location.origin}/share/${res.data.shareCode}`
+    const code = typeof res.data === 'string' ? res.data : res.data?.shareCode
+    shareLink.value = `${window.location.origin}/share/${code}`
     shareDialogVisible.value = true
   } catch (error) {
     ElMessage.error('生成分享链接失败')
