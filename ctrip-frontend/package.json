@@ -1,7 +1,7 @@
 {
   "name": "ctrip-frontend",
   "version": "1.0.0",
-  "description": "捷程旅行网 - 前端项目",
+  "description": "趣行旅行平台 - 前端项目",
   "type": "module",
   "scripts": {
     "dev": "vite",

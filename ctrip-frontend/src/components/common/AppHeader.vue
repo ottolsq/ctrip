@@ -4,7 +4,7 @@
       <!-- Logo -->
       <div class="logo" @click="router.push('/')">
         <el-icon :size="24"><Compass /></el-icon>
-        <span class="logo-text">捷程旅行网</span>
+        <span class="logo-text">趣行旅行平台</span>
       </div>
 
       <!-- 导航菜单 -->

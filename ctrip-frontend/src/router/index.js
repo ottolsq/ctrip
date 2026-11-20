@@ -202,7 +202,7 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   // 设置页面标题
-  document.title = to.meta.title ? `${to.meta.title} - 捷程旅行网` : '捷程旅行网'
+  document.title = to.meta.title ? `${to.meta.title} - 趣行旅行平台` : '趣行旅行平台'
 
   const token = storage.getToken()
 

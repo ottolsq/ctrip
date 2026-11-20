@@ -1,7 +1,7 @@
 <template>
   <div class="about">
     <div class="about-hero">
-      <h2>关于捷程旅行网</h2>
+      <h2>关于趣行旅行平台</h2>
       <p>致力于为您提供最优质的旅行服务体验</p>
     </div>
 

@@ -27,7 +27,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; 2026 捷程旅行网. All rights reserved.</p>
+        <p>&copy; 2026 趣行旅行平台. All rights reserved.</p>
       </div>
     </div>
   </footer>

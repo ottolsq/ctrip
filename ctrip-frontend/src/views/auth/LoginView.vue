@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-header">
         <h2>欢迎回来</h2>
-        <p>登录捷程旅行网，开启你的旅程</p>
+        <p>登录趣行旅行平台，开启你的旅程</p>
       </div>
 
       <!-- 登录方式切换 -->

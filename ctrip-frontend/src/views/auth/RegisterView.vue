@@ -3,7 +3,7 @@
     <div class="register-card">
       <div class="register-header">
         <h2>创建账号</h2>
-        <p>加入捷程旅行网，探索精彩世界</p>
+        <p>加入趣行旅行平台，探索精彩世界</p>
       </div>
 
       <!-- 注册方式切换 -->

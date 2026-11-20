@@ -1,4 +1,4 @@
-# 捷程旅行网 — 简历投递材料
+# 趣行旅行平台 — 简历投递材料
 
 > 本文档整合项目亮点、简历写法、面试话术、待改进项，用于简历撰写和面试准备。
 
@@ -8,7 +8,7 @@
 
 | 项 | 内容 |
 |----|------|
-| 项目名称 | 捷程旅行网（Ctrip Backend） |
+| 项目名称 | 趣行旅行平台（Ctrip Backend） |
 | 类型 | 轻量级旅游 Web 平台后端 |
 | 技术栈 | Java 25 / Spring Boot 3.5.13 / MyBatis Plus 3.5.12 / MySQL 8.1 |
 | 中间件 | Redis (Redisson) / RabbitMQ / DashScope AI (通义千问) |
