@@ -12,7 +12,7 @@
 	<artifactId>backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ctrip-backend</name>
-	<description>捷程旅行网 后端服务</description>
+	<description>趣行旅行平台 后端服务</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -62,6 +62,12 @@
 		<dependency>
 			<groupId>com.baomidou</groupId>
 			<artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+			<version>3.5.12</version>
+		</dependency>
+		<!-- MyBatis Plus 分页插件（3.5.9+ 独立模块） -->
+		<dependency>
+			<groupId>com.baomidou</groupId>
+			<artifactId>mybatis-plus-jsqlparser</artifactId>
 			<version>3.5.12</version>
 		</dependency>
 

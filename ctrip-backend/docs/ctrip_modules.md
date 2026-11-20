@@ -448,10 +448,11 @@
 
 - `application.properties` 已添加 `app.upload.dir`、`app.upload.base-url`、`spring.servlet.multipart.*` 配置
 
-### 3. MyBatis Plus 分页插件 ✅ 已完成（自动配置）
+### 3. MyBatis Plus 分页插件 ✅ 已完成（手动注册）
 
-- MyBatis Plus 3.5.12 `spring-boot3-starter` 已通过 `MybatisPlusAutoConfiguration` 自动注册分页插件
-- `Page` + `selectPage` 可直接使用，无需手动注册
+- 3.5.9+ 分页拦截器拆分到独立模块 `mybatis-plus-jsqlparser`，已在 `pom.xml` 引入 3.5.12
+- `MybatisPlusConfig` 注册 `MybatisPlusInterceptor` + `PaginationInnerInterceptor(DbType.MYSQL)`
+- `Page` + `selectPage` 现在返回真实的 `records/total/size/current/pages`
 
 ### 4. 评论删除路径 ✅ 已完成
 

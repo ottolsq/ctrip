@@ -1,6 +1,9 @@
 package com.ctrip.config;
 
+import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import org.apache.ibatis.reflection.MetaObject;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,10 +16,21 @@ import java.time.LocalDateTime;
  * <p>目前包含：
  * <ul>
  *   <li>{@link MetaObjectHandler} 实现 — 在 INSERT/UPDATE 时自动填充审计时间字段
+ *   <li>{@link PaginationInnerInterceptor} — 分页查询拦截器
  * </ul>
  */
 @Configuration
 public class MybatisPlusConfig {
+
+    /**
+     * MyBatis Plus 插件链：当前注册 MySQL 分页插件。
+     */
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        return interceptor;
+    }
 
     /**
      * 自动填充处理器。
