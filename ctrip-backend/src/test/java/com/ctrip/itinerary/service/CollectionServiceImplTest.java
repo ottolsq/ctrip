@@ -24,15 +24,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -181,6 +184,19 @@ class CollectionServiceImplTest {
         assertThat(itineraryItem.title()).isEqualTo("上海周末");
         assertThat(itineraryItem.summary()).isEqualTo("上海 · 2026-12-01 ~ 2026-12-03");
         assertThat(itineraryItem.authorName()).isNull();
+    }
+
+    @Test
+    @DisplayName("并发重复收藏：唯一键冲突被静默忽略")
+    void collect_duplicateKey_shouldNotThrow() {
+        Guide guide = Guide.builder().id(10L).status(GuideStatus.PUBLISHED).build();
+        when(guideMapper.selectById(10L)).thenReturn(guide);
+        when(collectionMapper.selectCount(any())).thenReturn(0L);
+        doThrow(new DuplicateKeyException("uk_user_target"))
+                .when(collectionMapper).insert(any(Collection.class));
+
+        assertThatCode(() -> collectionService.collect(1L, CollectionTargetType.GUIDE, 10L))
+                .doesNotThrowAnyException();
     }
 
     @Test
