@@ -788,7 +788,7 @@ public interface BlindBoxSchemeService {
 
 - **框架：** Spring Boot 3.x
 - **ORM：** MyBatis Plus
-- **数据库：** MySQL 8.0
+- **数据库：** MySQL 8.4 LTS
 - **缓存/锁：** Redis（分布式锁 `lock:blindbox:*`、限流、热点缓存）
 - **消息队列：** RabbitMQ（未来，订单/开盒事件）
 - **工具：** Lombok, Jakarta Validation

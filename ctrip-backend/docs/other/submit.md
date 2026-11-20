@@ -10,7 +10,7 @@
 |----|------|
 | 项目名称 | 趣行旅行平台（Ctrip Backend） |
 | 类型 | 轻量级旅游 Web 平台后端 |
-| 技术栈 | Java 25 / Spring Boot 3.5.13 / MyBatis Plus 3.5.12 / MySQL 8.1 |
+| 技术栈 | Java 25 / Spring Boot 3.5.13 / MyBatis Plus 3.5.12 / MySQL 8.4 LTS |
 | 中间件 | Redis (Redisson) / RabbitMQ / DashScope AI (通义千问) |
 | 代码规模 | 181 个 Java 源文件，~11,500 行 |
 | 文档规模 | 17 份设计文档，~12,500 行 |
@@ -58,7 +58,7 @@
 
 ```
 后端：Java 25, Spring Boot 3.5, Spring Security, MyBatis Plus, JUnit 5, Mockito
-中间件：MySQL 8.1, Redis (Redisson/布隆过滤器/Lua), RabbitMQ (事件驱动/削峰)
+中间件：MySQL 8.4 LTS, Redis (Redisson/布隆过滤器/Lua), RabbitMQ (事件驱动/削峰)
 AI：阿里云 DashScope SDK, 通义千问 (qwen-plus), Prompt Engineering
 安全：JWT (HS256), BCrypt, Bucket4j 限流, Magic Bytes 文件校验
 高并发：分布式锁, Lua 原子脚本, 缓存穿透/雪崩防护, 异步削峰, 幂等消费

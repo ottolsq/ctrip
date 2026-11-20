@@ -379,7 +379,7 @@ src/main/java/com/ctrip/
 | 后端框架 | Spring Boot 3.5.13 | RESTful API、业务逻辑 |
 | 身份认证 | JWT (HS256) | 无状态认证、Token 管理 |
 | ORM | MyBatis Plus | 数据访问 |
-| 数据库 | MySQL 8.0 | 核心数据存储 |
+| 数据库 | MySQL 8.4 LTS | 核心数据存储 |
 | 缓存 | Redis | 热点数据缓存、会话管理（后续） |
 | 对象存储 | 本地存储 / 阿里云 OSS | 图片上传（MVP 本地，后续 OSS） |
 | 消息队列 | RabbitMQ | 异步消息、订单状态同步（后续） |

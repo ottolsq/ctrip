@@ -1,0 +1,159 @@
+# 本地开发环境（WSL2）
+
+> 更新日期：2026-11-20
+> 适用环境：Windows 11 + WSL2 Ubuntu 24.04，仅用于本地开发与答辩演示。
+
+## 1. 组件版本
+
+| 组件 | 版本 | 安装来源 |
+|------|------|----------|
+| JDK | Eclipse Temurin 25.0.5 LTS | winget |
+| MySQL | 8.4.13 LTS | Oracle MySQL APT 仓库（`mysql-8.4-lts`） |
+| Redis | 8.10.3 | packages.redis.io APT 仓库 |
+| RabbitMQ | 4.4.1 | GitHub 通用二进制包 |
+| Erlang/OTP | 27.3.4.18 | Launchpad `ppa:rabbitmq/rabbitmq-erlang` |
+| Node.js | 26.x | 用户环境已安装 |
+| Maven | Maven Wrapper（`./mvnw`） | 项目自带 |
+
+选择 WSL2 原生服务而不是 Docker：当前网络无法访问 Docker Hub；WSL2 + systemd 已可用，安装与排障更直接。
+
+## 2. 启动与停止
+
+```bash
+# 启动 WSL 与三个中间件（systemd 自启）
+wsl -d Ubuntu-24.04 -u root -- bash -lc \
+  'systemctl start mysql redis-server rabbitmq-server'
+
+# 查看状态
+wsl -d Ubuntu-24.04 -u root -- bash -lc \
+  'systemctl is-active mysql redis-server rabbitmq-server'
+
+# 保持 WSL 常驻（避免空闲自动停止导致 Windows 侧端口不可达）
+wsl -d Ubuntu-24.04 -u root -- sleep infinity
+
+# 停止
+wsl -d Ubuntu-24.04 -u root -- bash -lc \
+  'systemctl stop rabbitmq-server redis-server mysql'
+```
+
+Windows 侧通过 WSL localhost forwarding 访问 `127.0.0.1` 的 3306 / 6379 / 5672 / 15672。
+
+## 3. MySQL 8.4
+
+### 3.1 账号与数据库
+
+- 地址：`localhost:3306`
+- 账号：`root / 123456`
+- 数据库：`ctrip`，字符集 `utf8mb4`
+
+`application.properties` 的连接串已包含：
+
+```text
+useSSL=false&allowPublicKeyRetrieval=true
+```
+
+原因：MySQL 8 默认使用 `caching_sha2_password`，非 SSL 连接需要允许公钥检索（仅开发环境）。
+
+### 3.2 初始化数据
+
+按依赖顺序导入 DDL，再导入示例数据：
+
+```bash
+cd /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL
+for f in ctrip_user.sql ctrip_content.sql ctrip_itinerary.sql ctrip_blindbox.sql \
+         ctrip_user_demo_data.sql ctrip_content_demo_data.sql \
+         ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql; do
+  mysql -uroot -p123456 ctrip < "$f"
+done
+```
+
+导入后共 15 张表；示例数据包含 5 个用户、5 个目的地、6 篇攻略、8 条行程、5 个盲盒模板。
+
+## 4. Redis 8.10
+
+- 地址：`localhost:6379`
+- 无密码（开发环境）
+- 监听：`0.0.0.0`；`protected-mode no`（仅开发环境，便于 Windows 侧访问）
+
+## 5. RabbitMQ 4.4.1
+
+- AMQP：`localhost:5672`，账号 `guest / guest`
+- 管理台：http://localhost:15672（`guest / guest`）
+- 安装目录：`/opt/rabbitmq_server-4.4.1`（软链 `/opt/rabbitmq`）
+- 配置：`/etc/rabbitmq/rabbitmq.conf`
+- 数据：`/var/lib/rabbitmq`
+- 日志：`/var/log/rabbitmq`
+- systemd 服务：`rabbitmq-server.service`
+
+`rabbitmqctl` 需以服务用户执行，避免 Erlang cookie 不一致：
+
+```bash
+su -s /bin/sh rabbitmq -c \
+  'HOME=/var/lib/rabbitmq RABBITMQ_HOME=/opt/rabbitmq /opt/rabbitmq/sbin/rabbitmqctl status'
+```
+
+关键配置：
+
+```text
+listeners.tcp.1 = 0.0.0.0:5672
+loopback_users.guest = false
+management.tcp.ip = 0.0.0.0
+management.tcp.port = 15672
+```
+
+## 6. 启动应用
+
+```bash
+# 后端（8080）
+cd ctrip-backend
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-25.0.5.8-hotspot"
+export PATH="$JAVA_HOME/bin:$PATH"
+./mvnw spring-boot:run
+
+# 前端（3000，代理到 8080）
+cd ctrip-frontend
+npm install
+npm run dev
+```
+
+## 7. 验证
+
+### 7.1 后端测试
+
+```bash
+cd ctrip-backend
+./mvnw test
+```
+
+当前基线：**73/73 通过**。`CtripApplicationTests` 使用 H2，并通过
+`app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
+延迟 1 分钟，避免测试上下文在空库上触发查询。
+
+### 7.2 API 级端到端
+
+后端启动后执行：
+
+```bash
+python -I ctrip-backend/scripts/e2e_p0.py
+```
+
+覆盖路径：
+
+1. 邮箱注册与登录；
+2. 攻略收藏 / 收藏状态 / 我的收藏 / 取消收藏；
+3. 行程创建 → 发布 → 分享（免登录读取，`isOwner=false`）→ 归档 → 重新发布；
+4. 行程收藏与取消；
+5. 盲盒下单 → 模拟支付 → 异步开盒（RabbitMQ + AI 失败回退）→ 结果查询。
+
+脚本会创建新的测试用户与订单，可重复执行。
+
+## 8. 安全说明
+
+以上配置仅用于本地开发：
+
+- MySQL 使用开发密码；
+- Redis 无密码且关闭保护模式；
+- RabbitMQ 允许 guest 远程登录；
+- JWT secret 与 AI API Key 为开发占位值。
+
+生产环境必须改为环境变量注入、强密码、最小权限账号与受限网络访问。

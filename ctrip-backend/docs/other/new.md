@@ -11,7 +11,7 @@
 | 项目名称 | 趣行旅行平台 |
 | 时间 | 2025-12 ~ 2026-02 |
 | 角色 | 后端开发 |
-| 技术栈 | Java 25 / Spring Boot 3.5.13 / MyBatis Plus / MySQL 8.1 / Redis(Redisson) / RabbitMQ / DashScope AI(通义千问) |
+| 技术栈 | Java 25 / Spring Boot 3.5.13 / MyBatis Plus / MySQL 8.4 LTS / Redis(Redisson) / RabbitMQ / DashScope AI(通义千问) |
 | 代码规模 | 181 个 Java 源文件，~11,500 行 |
 | 测试规模 | 58 个测试用例（35 个新增），BUILD SUCCESS |
 
@@ -111,7 +111,7 @@ Access Token(15min) + Refresh Token(15天) 轮换机制，刷新时吊销旧 Tok
 
 ```
 后端：Java 25, Spring Boot 3.5, Spring Security, MyBatis Plus, JUnit 5, Mockito, AssertJ
-中间件：MySQL 8.1, Redis (Redisson/布隆过滤器/Lua 脚本), RabbitMQ (事件驱动/削峰/死信)
+中间件：MySQL 8.4 LTS, Redis (Redisson/布隆过滤器/Lua 脚本), RabbitMQ (事件驱动/削峰/死信)
 AI：阿里云 DashScope SDK, 通义千问 (qwen-plus), Prompt Engineering
 安全：JWT (HS256) 双令牌轮换, BCrypt 强度12, Bucket4j 限流, SHA-256 哈希存储
 高并发：三级秒杀方案, Lua 原子脚本, 三层缓存防穿透, TTL 随机偏移防雪崩, 幂等消费

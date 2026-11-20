@@ -23,10 +23,10 @@
 | 层级 | 技术选型 |
 |------|---------|
 | 语言/框架 | Java 25 + Spring Boot 3.5.13 |
-| 数据访问 | MyBatis Plus + MySQL 8.1 |
+| 数据访问 | MyBatis Plus + MySQL 8.4 LTS |
 | 认证安全 | Spring Security + JWT (HS256) + BCrypt |
-| 缓存/锁 | Redis + Redisson（布隆过滤器、Lua 脚本、分布式锁） |
-| 消息队列 | RabbitMQ（异步削峰、事件驱动、死信队列） |
+| 缓存/锁 | Redis 8.10 + Redisson 3.37（布隆过滤器、Lua 脚本、分布式锁） |
+| 消息队列 | RabbitMQ 4.4（异步削峰、事件驱动、死信队列） |
 | AI 服务 | 阿里云 DashScope 通义千问 |
 | 构建/测试 | Maven + JUnit 5 + Mockito + AssertJ |
 
@@ -98,6 +98,28 @@ ctrip/
 
 ## 快速开始
 
+### 本地开发环境（WSL2）
+
+当前开发环境为 Windows 11 + WSL2 Ubuntu 24.04：
+
+| 组件 | 版本 |
+|------|------|
+| JDK | Eclipse Temurin 25.0.5 |
+| MySQL | 8.4.13 LTS |
+| Redis | 8.10.3 |
+| RabbitMQ | 4.4.1（Erlang/OTP 27.3） |
+| Node.js | 26.x |
+
+启动中间件：
+
+```bash
+wsl -d Ubuntu-24.04 -u root -- bash -lc 'systemctl start mysql redis-server rabbitmq-server'
+```
+
+- MySQL：`root / 123456`，数据库 `ctrip`
+- RabbitMQ 管理台：http://localhost:15672（`guest / guest`）
+- 详细安装、配置、数据库导入与 API 级 E2E 说明见 [ctrip-backend/docs/other/dev_environment.md](ctrip-backend/docs/other/dev_environment.md)
+
 ### 后端
 
 ```bash
@@ -127,6 +149,8 @@ npm run dev
 - `ctrip_modules.md`：功能模块、业务流程、数据库设计
 - `ctrip_plan.md`：开发计划、接口设计、MVP 范围
 - `SQL/`：MySQL 建表与示例数据脚本
+- `other/dev_environment.md`：WSL2 中间件版本、启动与联调说明
 - `other/`：详细方案设计、测试方案、项目亮点
+- `scripts/e2e_p0.py`：P0 用户端 API 级端到端验证脚本
 
 ---
