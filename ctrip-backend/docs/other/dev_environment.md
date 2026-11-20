@@ -61,13 +61,25 @@ useSSL=false&allowPublicKeyRetrieval=true
 ```bash
 cd /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL
 for f in ctrip_user.sql ctrip_content.sql ctrip_itinerary.sql ctrip_blindbox.sql \
+         ctrip_admin.sql \
          ctrip_user_demo_data.sql ctrip_content_demo_data.sql \
-         ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql; do
+         ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql \
+         ctrip_admin_seed.sql; do
   mysql -uroot -p123456 ctrip < "$f"
 done
 ```
 
-导入后共 15 张表；示例数据包含 5 个用户、5 个目的地、6 篇攻略、8 条行程、5 个盲盒模板。
+- `ctrip_admin.sql` 是 P1 迁移脚本，**仅执行一次**；重复执行会因列已存在而失败。
+- 导入后共 17 张表；示例数据包含 5 个用户、5 个目的地、6 篇攻略、8 条行程、5 个盲盒模板。
+
+### 3.3 后台种子账号（仅开发）
+
+| 账号 | 密码 | 角色 |
+|------|------|------|
+| admin@example.com | Admin12345 | ADMIN |
+| operator@example.com | Operator12345 | CONTENT_OPERATOR |
+
+由 `ctrip_admin_seed.sql` 写入，仅用于本地开发与答辩演示。
 
 ## 4. Redis 8.10
 
