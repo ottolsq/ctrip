@@ -9,6 +9,7 @@ import java.util.List;
  */
 public record ItineraryResponse(
         Long id,
+        boolean isOwner,
         String title,
         Long destinationId,
         LocalDate startDate,

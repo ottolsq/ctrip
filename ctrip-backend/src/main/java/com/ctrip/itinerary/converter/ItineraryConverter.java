@@ -42,7 +42,8 @@ public class ItineraryConverter {
         );
     }
 
-    public static ItineraryResponse toResponse(Itinerary entity, List<ItineraryDay> days, List<ItineraryItem> items) {
+    public static ItineraryResponse toResponse(Itinerary entity, List<ItineraryDay> days,
+                                               List<ItineraryItem> items, boolean isOwner) {
         java.util.Map<Long, List<ItineraryItem>> itemsByDay = items.stream()
                 .collect(Collectors.groupingBy(ItineraryItem::getItineraryDayId));
 
@@ -58,6 +59,7 @@ public class ItineraryConverter {
 
         return new ItineraryResponse(
                 entity.getId(),
+                isOwner,
                 entity.getTitle(),
                 entity.getDestinationId(),
                 entity.getStartDate(),

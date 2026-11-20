@@ -22,7 +22,10 @@
         <el-card class="itinerary-card" shadow="hover" @click="goDetail(item.id)">
           <div class="card-header">
             <h3>{{ item.title }}</h3>
-            <el-tag v-if="item.shareCode" type="success" size="small">已分享</el-tag>
+            <div class="card-tags">
+              <el-tag :type="statusTagType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
+              <el-tag v-if="item.shareCode" type="success" size="small">已分享</el-tag>
+            </div>
           </div>
           <div class="card-info">
             <div class="info-item">
@@ -94,6 +97,22 @@ function formatDate(date) {
   const d = new Date(date)
   if (isNaN(d.getTime())) return '-'
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function statusLabel(status) {
+  return {
+    DRAFT: '草稿',
+    PUBLISHED: '已发布',
+    ARCHIVED: '已归档'
+  }[status] || status
+}
+
+function statusTagType(status) {
+  return {
+    DRAFT: 'info',
+    PUBLISHED: 'success',
+    ARCHIVED: 'warning'
+  }[status] || 'info'
 }
 
 function getDayCount(item) {
@@ -248,6 +267,12 @@ onMounted(async () => {
     padding-bottom: 16px;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 16px;
+
+    .card-tags {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
 
     h3 {
       margin: 0;

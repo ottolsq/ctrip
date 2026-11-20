@@ -75,7 +75,7 @@ public class ItineraryServiceImpl implements ItineraryService {
             itineraryDayMapper.insert(day);
         }
 
-        return buildItineraryResponse(itinerary.getId());
+        return buildItineraryResponse(itinerary.getId(), userId);
     }
 
     @Override
@@ -123,7 +123,7 @@ public class ItineraryServiceImpl implements ItineraryService {
                     .setSql("view_count = view_count + 1"));
         }
 
-        return buildItineraryResponse(id);
+        return buildItineraryResponse(id, userId);
     }
 
     @Override
@@ -160,7 +160,7 @@ public class ItineraryServiceImpl implements ItineraryService {
         }
 
         itineraryMapper.update(null, wrapper);
-        return buildItineraryResponse(id);
+        return buildItineraryResponse(id, userId);
     }
 
     @Override
@@ -218,7 +218,7 @@ public class ItineraryServiceImpl implements ItineraryService {
         ItineraryDay day = ItineraryConverter.toDayEntity(request, itineraryId, sortOrder);
         itineraryDayMapper.insert(day);
 
-        return buildItineraryResponse(itineraryId);
+        return buildItineraryResponse(itineraryId, userId);
     }
 
     @Override
@@ -374,7 +374,7 @@ public class ItineraryServiceImpl implements ItineraryService {
                 .eq(Itinerary::getId, itinerary.getId())
                 .setSql("view_count = view_count + 1"));
 
-        return buildItineraryResponse(itinerary.getId());
+        return buildItineraryResponse(itinerary.getId(), null);
     }
 
     @Override
@@ -442,7 +442,7 @@ public class ItineraryServiceImpl implements ItineraryService {
         return item;
     }
 
-    private ItineraryResponse buildItineraryResponse(Long itineraryId) {
+    private ItineraryResponse buildItineraryResponse(Long itineraryId, Long viewerId) {
         Itinerary itinerary = requireItinerary(itineraryId);
 
         List<ItineraryDay> days = itineraryDayMapper.selectList(
@@ -459,7 +459,8 @@ public class ItineraryServiceImpl implements ItineraryService {
                         .orderByAsc(ItineraryItem::getSortOrder)
         );
 
-        return ItineraryConverter.toResponse(itinerary, days, items);
+        boolean isOwner = viewerId != null && itinerary.getUserId().equals(viewerId);
+        return ItineraryConverter.toResponse(itinerary, days, items, isOwner);
     }
 
     private ItineraryDayResponse buildDayResponse(Long dayId) {

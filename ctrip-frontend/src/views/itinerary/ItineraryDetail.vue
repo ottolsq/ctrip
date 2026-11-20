@@ -12,7 +12,11 @@
     <div v-else>
       <div class="detail-header">
         <div class="header-info">
-          <h1>{{ itinerary.title }}</h1>
+          <div class="title-row">
+            <h1>{{ itinerary.title }}</h1>
+            <el-tag :type="statusInfo.type" size="small">{{ statusInfo.label }}</el-tag>
+            <el-tag v-if="isShare" type="info" size="small">分享查看</el-tag>
+          </div>
           <div class="meta-info">
             <span class="meta-item">
               <el-icon><MapLocation /></el-icon>
@@ -29,8 +33,20 @@
           </div>
         </div>
         <div class="header-actions">
-          <el-button icon="Share" @click="handleShare">分享</el-button>
-          <el-button icon="Edit" type="primary" @click="router.push(`/itineraries/${itinerary.id}/edit`)">编辑</el-button>
+          <template v-if="isOwner">
+            <el-button v-if="itinerary.status === 'DRAFT'" type="success" @click="handleStatusChange('PUBLISHED')">发布</el-button>
+            <el-button v-else-if="itinerary.status === 'PUBLISHED'" type="warning" @click="handleStatusChange('ARCHIVED')">归档</el-button>
+            <el-button v-else type="success" @click="handleStatusChange('PUBLISHED')">重新发布</el-button>
+            <el-button v-if="itinerary.status === 'PUBLISHED'" icon="Share" @click="handleShare">分享</el-button>
+            <el-button icon="Edit" type="primary" @click="router.push(`/itineraries/${itinerary.id}/edit`)">编辑</el-button>
+          </template>
+          <el-button
+            v-if="!isShare && !isOwner && userStore.isLoggedIn"
+            :type="collected ? 'warning' : 'default'"
+            @click="handleToggleCollect"
+          >
+            {{ collected ? '已收藏' : '收藏' }}
+          </el-button>
           <el-button icon="ArrowLeft" @click="router.push('/itineraries')">返回列表</el-button>
         </div>
       </div>
@@ -121,17 +137,38 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { MapLocation, Calendar, List, View, Star, Clock, Location } from '@element-plus/icons-vue'
-import { getItinerary, shareItinerary } from '@/api/itinerary'
+import {
+  getItinerary,
+  getSharedItinerary,
+  shareItinerary,
+  updateItinerary,
+  collectItinerary
+} from '@/api/itinerary'
+import { getCollectionStatus } from '@/api/collection'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(true)
 const itinerary = ref(null)
+const collected = ref(false)
+
+const isShare = computed(() => route.meta?.isShare === true)
+const isOwner = computed(() => !isShare.value && itinerary.value?.isOwner === true)
+const statusInfo = computed(() => {
+  const map = {
+    DRAFT: { label: '草稿', type: 'info' },
+    PUBLISHED: { label: '已发布', type: 'success' },
+    ARCHIVED: { label: '已归档', type: 'warning' }
+  }
+  return map[itinerary.value?.status] || { label: itinerary.value?.status || '-', type: 'info' }
+})
 
 const shareDialogVisible = ref(false)
 const shareLink = ref('')
@@ -183,11 +220,21 @@ function getDestinationName(item) {
 }
 
 async function loadData() {
-  const id = route.params.id
   loading.value = true
   try {
-    const res = await getItinerary(id)
+    const res = isShare.value
+      ? await getSharedItinerary(route.params.code)
+      : await getItinerary(route.params.id)
     itinerary.value = res.data
+    collected.value = false
+    if (!isShare.value && !isOwner.value && userStore.isLoggedIn) {
+      try {
+        const statusRes = await getCollectionStatus('ITINERARY', itinerary.value.id)
+        collected.value = statusRes.data?.collected === true
+      } catch {
+        collected.value = false
+      }
+    }
   } catch {
     itinerary.value = null
   } finally {
@@ -195,10 +242,36 @@ async function loadData() {
   }
 }
 
+async function handleStatusChange(status) {
+  try {
+    await updateItinerary(itinerary.value.id, { status })
+    ElMessage.success(status === 'PUBLISHED' ? '行程已发布' : '行程已归档')
+    await loadData()
+  } catch {
+    // 错误已由请求拦截器提示
+  }
+}
+
+async function handleToggleCollect() {
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const add = !collected.value
+  try {
+    await collectItinerary(itinerary.value.id, add)
+    collected.value = add
+    ElMessage.success(add ? '已收藏' : '已取消收藏')
+  } catch {
+    // 错误已由请求拦截器提示
+  }
+}
+
 async function handleShare() {
   try {
     const res = await shareItinerary(itinerary.value.id)
-    shareLink.value = `${window.location.origin}/itineraries/share/${res.data.shareCode}`
+    shareLink.value = `${window.location.origin}/share/${res.data.shareCode}`
     shareDialogVisible.value = true
   } catch (error) {
     ElMessage.error('生成分享链接失败')
@@ -221,6 +294,12 @@ onMounted(() => {
 
 <style scoped>
 .itinerary-detail {
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   .loading-state, .empty-state {
     display: flex;
     flex-direction: column;
