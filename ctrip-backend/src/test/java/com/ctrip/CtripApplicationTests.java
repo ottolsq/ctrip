@@ -12,7 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
  * 保证 CI 环境无需真实数据库连接即可通过上下文启动验证。
  */
 @SpringBootTest(properties = {
-    "app.jwt.secret=test-secret-key-minimum-32-bytes!!"
+    "app.jwt.secret=test-secret-key-minimum-32-bytes!!",
+    "app.cache.bloom.enabled=false"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 class CtripApplicationTests {

@@ -7,6 +7,7 @@ import com.ctrip.content.entity.enums.GuideStatus;
 import com.ctrip.content.mapper.DestinationMapper;
 import com.ctrip.content.mapper.GuideMapper;
 import org.redisson.api.RBloomFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.redisson.api.RedissonClient;
@@ -31,6 +32,10 @@ import java.util.List;
 public class CacheConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CacheConfig.class);
+
+    /** 是否在启动时从数据库预加载布隆过滤器（测试环境可关闭）。 */
+    @Value("${app.cache.bloom.enabled:true}")
+    private boolean bloomEnabled;
 
     // ========================================================================
     // 缓存 TTL 常量（均会加 ±10% 随机偏移，防止缓存雪崩）
@@ -138,6 +143,10 @@ public class CacheConfig {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void initBloomFilters() {
+        if (!bloomEnabled) {
+            log.info("布隆过滤器启动预加载已禁用（app.cache.bloom.enabled=false）");
+            return;
+        }
         initDestinationBloomFilter();
         initGuideBloomFilter();
     }
