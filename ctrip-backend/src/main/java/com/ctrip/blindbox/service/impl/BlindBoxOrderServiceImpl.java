@@ -36,6 +36,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -277,9 +279,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                     .eq(BlindBoxOrder::getId, order.getId())
                     .set(BlindBoxOrder::getStatus, OrderStatus.PROCESSING));
 
-            // 发送 MQ 消息——BlindBoxResultGenConsumer 异步消费完成 AI 生成
-            eventPublisher.publishBlindBoxOpenEvent(
-                    "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
+            // 事务提交后再发 MQ：避免消费者早于 PROCESSING 状态落库而跳过事件
+            publishOpenEventAfterCommit(order, userId);
 
             log.info("开盒请求已提交: orderNo={}, userId={}", orderNo, userId);
 
@@ -338,7 +339,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     // ========== 定时任务：过期订单扫描 ==========
 
     @Override
-    @Scheduled(fixedRate = 60000) // 每分钟执行一次
+    @Scheduled(fixedRate = 60000, initialDelay = 60000) // 每分钟执行一次，首跑延迟 1 分钟
     @Transactional
     public void cancelExpiredOrders() {
         LocalDateTime now = LocalDateTime.now();
@@ -493,6 +494,21 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         } catch (NumberFormatException e) {
             log.warn("解析订单号序号失败: orderNo={}", lastOrderNo);
             return 0L;
+        }
+    }
+
+    private void publishOpenEventAfterCommit(BlindBoxOrder order, Long userId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    eventPublisher.publishBlindBoxOpenEvent(
+                            "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
+                }
+            });
+        } else {
+            eventPublisher.publishBlindBoxOpenEvent(
+                    "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
         }
     }
 

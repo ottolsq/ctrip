@@ -102,6 +102,10 @@ public class BlindBoxResultGenConsumer {
             // 2. 确认订单状态仍为 PROCESSING
             BlindBoxOrder order = orderMapper.selectById(event.orderId());
             if (order == null || order.getStatus() != OrderStatus.PROCESSING) {
+                if (order == null || order.getStatus() == OrderStatus.PAID) {
+                    // 事件早于状态提交到达：释放幂等锁，允许后续重投递重新处理
+                    stringRedisTemplate.delete(idempotentKey);
+                }
                 log.info("订单状态非PROCESSING，跳过: orderId={}, status={}",
                         event.orderId(), order != null ? order.getStatus() : "null");
                 return;
