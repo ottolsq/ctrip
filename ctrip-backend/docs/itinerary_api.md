@@ -65,7 +65,7 @@
 
 ### 认证方式
 
-- **分享查看接口**（`GET /api/v1/share/{shareCode}`）：无需认证
+- **分享查看接口**（`GET /api/v1/itineraries/share/{shareCode}`）：无需认证
 - **其他所有行程接口**：必须在请求头中携带有效的 Access Token
 
 ```
@@ -270,6 +270,8 @@ curl -X GET "http://localhost:8080/api/v1/itineraries?page=1&limit=10&status=DRA
 | PUBLISHED | 可查看完整详情 | 可查看（非创建者访问时 viewCount +1） |
 | ARCHIVED | 可查看完整详情 | 可查看（只读） |
 
+响应中的 `isOwner` 表示当前请求者是否为创建者；前端据此决定是否展示编辑、发布/归档、分享与收藏操作。分享接口始终返回 `isOwner=false`。
+
 #### 成功响应 (200)
 
 ```json
@@ -277,6 +279,7 @@ curl -X GET "http://localhost:8080/api/v1/itineraries?page=1&limit=10&status=DRA
   "success": true,
   "data": {
     "id": 1,
+    "isOwner": true,
     "title": "上海三日深度游",
     "destinationId": 1,
     "startDate": "2026-06-01",
@@ -762,7 +765,7 @@ curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
 }
 ```
 
-返回的短码对应分享链接：`/api/v1/share/aB3xK9`
+返回的短码对应分享链接：`/api/v1/itineraries/share/aB3xK9`
 
 #### 失败响应
 
@@ -791,6 +794,7 @@ curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
   "success": true,
   "data": {
     "id": 1,
+    "isOwner": false,
     "title": "上海三日深度游",
     "destinationId": 1,
     "startDate": "2026-06-01",
@@ -826,7 +830,7 @@ curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
 }
 ```
 
-**注意**：分享响应中不暴露创建者的 `userId` 等敏感信息。
+**注意**：分享响应中不暴露创建者的 `userId` 等敏感信息，`isOwner` 恒为 `false`。
 
 #### 失败响应
 
