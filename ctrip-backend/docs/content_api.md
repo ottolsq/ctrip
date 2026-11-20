@@ -1401,6 +1401,99 @@ curl -X DELETE "http://localhost:8080/api/v1/admin/attractions/101" \
 
 ---
 
+## 收藏接口
+
+> 所有收藏接口均需 JWT 认证。
+
+### 我的收藏列表
+
+`GET /api/v1/collections`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页数量，默认 10，最大 100 |
+| type | string | 否 | `GUIDE` / `ITINERARY`；不传返回全部 |
+
+#### 成功响应 (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "id": 100,
+        "contentType": "GUIDE",
+        "contentId": 10,
+        "title": "杭州三日游",
+        "coverUrl": "https://example.com/covers/hangzhou.jpg",
+        "summary": "西湖攻略正文...",
+        "authorName": "Alice",
+        "createdAt": "2026-11-01T10:00:00"
+      }
+    ],
+    "total": 1,
+    "size": 10,
+    "current": 1,
+    "pages": 1
+  },
+  "error": null
+}
+```
+
+说明：
+- 已删除的内容会被跳过，并清理对应的孤立收藏记录。
+- 攻略仅返回已发布状态；他人的草稿行程不会出现在列表中。
+- 行程 `summary` 为“目的地 · 起止日期”，无目的地时仅返回日期。
+
+### 查询收藏状态
+
+`GET /api/v1/collections/status?targetType=GUIDE&targetId=10`
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| targetType | string | 是 | `GUIDE` / `ITINERARY` |
+| targetId | long | 是 | 目标 ID |
+
+#### 成功响应 (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "collected": true
+  },
+  "error": null
+}
+```
+
+### 收藏攻略
+
+`POST /api/v1/guides/{guideId}/collect`
+
+- 幂等：重复收藏直接返回成功。
+- 仅已发布（`PUBLISHED`）的攻略可收藏；否则返回 400。
+
+### 取消收藏攻略
+
+`DELETE /api/v1/guides/{guideId}/collect`
+
+- 幂等：未收藏时同样返回成功。
+
+### 取消收藏任意目标
+
+`DELETE /api/v1/collections/{targetType}/{targetId}`
+
+- `targetType` 取值 `GUIDE` / `ITINERARY`。
+- 幂等：记录不存在时同样返回成功。
+
+---
+
 ## 附录
 
 ### 季节枚举
