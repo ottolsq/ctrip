@@ -12,10 +12,10 @@ import com.ctrip.itinerary.entity.*;
 import com.ctrip.itinerary.entity.enums.CollectionTargetType;
 import com.ctrip.itinerary.entity.enums.ItineraryStatus;
 import com.ctrip.itinerary.entity.enums.ItemType;
-import com.ctrip.itinerary.mapper.CollectionMapper;
 import com.ctrip.itinerary.mapper.ItineraryDayMapper;
 import com.ctrip.itinerary.mapper.ItineraryItemMapper;
 import com.ctrip.itinerary.mapper.ItineraryMapper;
+import com.ctrip.itinerary.service.CollectionService;
 import com.ctrip.itinerary.service.ItineraryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,17 +40,17 @@ public class ItineraryServiceImpl implements ItineraryService {
     private final ItineraryMapper itineraryMapper;
     private final ItineraryDayMapper itineraryDayMapper;
     private final ItineraryItemMapper itineraryItemMapper;
-    private final CollectionMapper collectionMapper;
+    private final CollectionService collectionService;
     private final SecureRandom random = new SecureRandom();
 
     public ItineraryServiceImpl(ItineraryMapper itineraryMapper,
                                 ItineraryDayMapper itineraryDayMapper,
                                 ItineraryItemMapper itineraryItemMapper,
-                                CollectionMapper collectionMapper) {
+                                CollectionService collectionService) {
         this.itineraryMapper = itineraryMapper;
         this.itineraryDayMapper = itineraryDayMapper;
         this.itineraryItemMapper = itineraryItemMapper;
-        this.collectionMapper = collectionMapper;
+        this.collectionService = collectionService;
     }
 
     // ========== Itinerary CRUD ==========
@@ -192,26 +192,10 @@ public class ItineraryServiceImpl implements ItineraryService {
     @Transactional
     public void toggleCollection(Long id, Long userId, boolean add) {
         requireItineraryExists(id);
-
         if (add) {
-            // 防止重复收藏
-            LambdaQueryWrapper<Collection> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Collection::getUserId, userId)
-                    .eq(Collection::getTargetType, CollectionTargetType.ITINERARY)
-                    .eq(Collection::getTargetId, id);
-            if (collectionMapper.selectCount(wrapper) == 0) {
-                Collection collection = Collection.builder()
-                        .userId(userId)
-                        .targetType(CollectionTargetType.ITINERARY)
-                        .targetId(id)
-                        .build();
-                collectionMapper.insert(collection);
-            }
+            collectionService.collect(userId, CollectionTargetType.ITINERARY, id);
         } else {
-            collectionMapper.delete(new LambdaQueryWrapper<Collection>()
-                    .eq(Collection::getUserId, userId)
-                    .eq(Collection::getTargetType, CollectionTargetType.ITINERARY)
-                    .eq(Collection::getTargetId, id));
+            collectionService.uncollect(userId, CollectionTargetType.ITINERARY, id);
         }
     }
 
