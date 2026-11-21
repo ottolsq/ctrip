@@ -75,6 +75,16 @@ const adminRoutes = [
         }
       },
       {
+        path: 'blind-box/draw-records',
+        name: 'AdminDrawRecord',
+        component: () => import('@/views/admin/DrawRecordManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '抽取记录'
+        }
+      },
+      {
         path: 'banners',
         name: 'AdminBannerManage',
         component: () => import('@/views/admin/BannerManageView.vue'),

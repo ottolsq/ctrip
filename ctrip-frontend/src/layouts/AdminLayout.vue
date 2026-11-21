@@ -38,6 +38,10 @@
           <el-icon><Tickets /></el-icon>
           <span>订单管理</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/admin/blind-box/draw-records">
+          <el-icon><List /></el-icon>
+          <span>抽取记录</span>
+        </el-menu-item>
         <el-menu-item v-if="userStore.isAdmin" index="/admin/banners">
           <el-icon><Picture /></el-icon>
           <span>轮播图</span>
