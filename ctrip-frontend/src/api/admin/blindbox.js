@@ -19,3 +19,23 @@ export function updateTemplate(id, data) {
 export function deleteTemplate(id) {
   return request.delete(`/v1/admin/blind-box/templates/${id}`)
 }
+
+/**
+ * 管理端订单接口。
+ */
+
+export function getAdminOrders(params) {
+  return request.get('/v1/admin/blind-box/orders', { params })
+}
+
+export function getAdminOrder(orderNo) {
+  return request.get(`/v1/admin/blind-box/orders/${encodeURIComponent(orderNo)}`)
+}
+
+export function refundOrder(orderNo, reason) {
+  return request.post(`/v1/admin/blind-box/orders/${encodeURIComponent(orderNo)}/refund`, { reason })
+}
+
+export function retryOpenOrder(orderNo) {
+  return request.post(`/v1/admin/blind-box/orders/${encodeURIComponent(orderNo)}/retry-open`)
+}

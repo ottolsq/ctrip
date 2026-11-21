@@ -61,6 +61,16 @@ const adminRoutes = [
         }
       },
       {
+        path: 'blind-box/orders',
+        name: 'AdminBlindBoxOrder',
+        component: () => import('@/views/admin/OrderManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '订单管理'
+        }
+      },
+      {
         path: 'users',
         name: 'AdminUserManage',
         component: () => import('@/views/admin/UserManageView.vue'),

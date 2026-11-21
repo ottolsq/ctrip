@@ -34,6 +34,10 @@
           <el-icon><Box /></el-icon>
           <span>盲盒模板</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/admin/blind-box/orders">
+          <el-icon><Tickets /></el-icon>
+          <span>订单管理</span>
+        </el-menu-item>
         <el-menu-item v-if="userStore.isAdmin" index="/admin/users">
           <el-icon><User /></el-icon>
           <span>用户管理</span>
