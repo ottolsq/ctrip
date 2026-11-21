@@ -52,13 +52,23 @@ wall=0.261s rps=76.7 p95=241.7ms stock_after=0
 | 已封禁用户不显示“封禁”按钮 | `businessRules.test.js` `canBanUser` | 通过 |
 | 盲盒确认订单页显示规则 description | `businessRules.test.js` `ruleDescription` | 通过 |
 | 模板编辑保留未知 `ruleConfig` 字段 | `businessRules.test.js` `mergeRuleConfig` | 通过 |
-| 首页轮播/推荐有数据展示、无数据隐藏 | 公开 API E2E + `v-if` + 空 slot 断言 | 接口通过，**视觉待用户签收** |
-| 数据概览数字加载 | Dashboard API E2E + 前端构建 | 接口通过，**视觉待用户签收** |
+| 首页轮播/推荐有数据展示、无数据隐藏 | 公开 API E2E + `v-if` + 空 slot 断言 | 通过（用户 2026-11-21 浏览器签收） |
+| 数据概览数字加载 | Dashboard API E2E + 前端构建 | 通过（用户 2026-11-21 浏览器签收） |
 | 普通用户/运营访问管理端 403 | P1.4 E2E（6 次 403） | 通过 |
 | 非法枚举/请求体返回 400 | `GlobalExceptionHandlerTest` | 通过 |
 | 审核并发后到者 400 | `AdminGuideServiceImplTest` 条件更新 0 行 | 通过 |
 
-## 5. 本阶段修复的 Minor
+## 5. 用户签收
+
+2026-11-21，用户在浏览器确认：
+
+- 内容运营登录后从“后台管理”进入攻略审核；
+- 管理员数据概览的用户/攻略/订单/销售额/7 天数据正常；
+- 首页轮播图“发现你的下一段旅程”与“精选推荐 · 杭州”正常展示。
+
+签收结论：**P2 验收通过**。
+
+## 6. 本阶段修复的 Minor
 
 1. 全局非法查询参数/请求体 → 400。
 2. 攻略审核改为 `WHERE status=PENDING` 条件更新。
@@ -69,7 +79,7 @@ wall=0.261s rps=76.7 p95=241.7ms stock_after=0
 7. 模板编辑保留未知规则字段。
 8. 补 P1.2 非 PENDING 驳回、审核条件更新 0 行测试。
 
-## 6. 仍遗留（不在 P2 范围）
+## 7. 仍遗留（不在 P2 范围）
 
 - 公开推荐位逐条查询（N+1）；
 - Dashboard 全表加载用户/攻略/订单；
