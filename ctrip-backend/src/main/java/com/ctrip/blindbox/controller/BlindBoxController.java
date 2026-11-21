@@ -1,6 +1,7 @@
 package com.ctrip.blindbox.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ctrip.blindbox.dto.DrawRecordResponse;
 import com.ctrip.blindbox.dto.OrderResponse;
 import com.ctrip.blindbox.dto.ProbabilityResponse;
 import com.ctrip.blindbox.dto.TemplateResponse;
@@ -9,6 +10,7 @@ import com.ctrip.blindbox.prize.BlindBoxPrizeService;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxResultService;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
+import com.ctrip.blindbox.service.DrawRecordService;
 import com.ctrip.common.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,15 +30,18 @@ public class BlindBoxController {
     private final BlindBoxResultService resultService;
     private final BlindBoxOrderService orderService;
     private final BlindBoxPrizeService prizeService;
+    private final DrawRecordService drawRecordService;
 
     public BlindBoxController(BlindBoxTemplateService templateService,
                               BlindBoxResultService resultService,
                               BlindBoxOrderService orderService,
-                              BlindBoxPrizeService prizeService) {
+                              BlindBoxPrizeService prizeService,
+                              DrawRecordService drawRecordService) {
         this.templateService = templateService;
         this.resultService = resultService;
         this.orderService = orderService;
         this.prizeService = prizeService;
+        this.drawRecordService = drawRecordService;
     }
 
     /**
@@ -68,6 +73,18 @@ public class BlindBoxController {
         // 仅上架模板可查看概率
         templateService.getTemplateDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(prizeService.getProbabilities()));
+    }
+
+    /**
+     * 我的抽取记录（需登录）。
+     */
+    @GetMapping("/draw-records")
+    public ResponseEntity<ApiResponse<Page<DrawRecordResponse>>> listMyDrawRecords(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                drawRecordService.listMine(userId, page, size)));
     }
 
     /**

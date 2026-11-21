@@ -7,8 +7,11 @@ import com.ctrip.blindbox.entity.BlindBoxResult;
 import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
+import com.ctrip.blindbox.prize.BlindBoxPrizeService;
+import com.ctrip.blindbox.prize.DrawnPrize;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
 import com.ctrip.blindbox.service.BlindBoxSchemeService;
+import com.ctrip.blindbox.service.DrawRecordService;
 import com.ctrip.blindbox.dto.SchemeResponse;
 import com.ctrip.messaging.event.BlindBoxOpenEvent;
 import com.ctrip.messaging.publisher.EventPublisher;
@@ -58,6 +61,8 @@ public class BlindBoxResultGenConsumer {
     private final BlindBoxResultMapper resultMapper;
     private final BlindBoxPreferenceService preferenceService;
     private final BlindBoxSchemeService schemeService;
+    private final BlindBoxPrizeService prizeService;
+    private final DrawRecordService drawRecordService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final EventPublisher eventPublisher;
@@ -66,6 +71,8 @@ public class BlindBoxResultGenConsumer {
                                       BlindBoxResultMapper resultMapper,
                                       BlindBoxPreferenceService preferenceService,
                                       BlindBoxSchemeService schemeService,
+                                      BlindBoxPrizeService prizeService,
+                                      DrawRecordService drawRecordService,
                                       StringRedisTemplate stringRedisTemplate,
                                       ObjectMapper objectMapper,
                                       EventPublisher eventPublisher) {
@@ -73,6 +80,8 @@ public class BlindBoxResultGenConsumer {
         this.resultMapper = resultMapper;
         this.preferenceService = preferenceService;
         this.schemeService = schemeService;
+        this.prizeService = prizeService;
+        this.drawRecordService = drawRecordService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
@@ -111,9 +120,10 @@ public class BlindBoxResultGenConsumer {
                 return;
             }
 
-            // 3. 查询偏好参数 → 调用 AI 生成方案（核心耗时操作）
+            // 3. 先按公示概率抽奖，再固定目的地生成方案（核心耗时操作）
             BlindBoxPreference preference = preferenceService.getByOrderId(order.getId());
-            SchemeResponse scheme = schemeService.generateScheme(preference);
+            DrawnPrize prize = prizeService.draw(order.getUserId(), order.getTemplateId());
+            SchemeResponse scheme = schemeService.generateScheme(preference, prize);
 
             // 4. 序列化方案为 JSON 存入结果表
             String resultText;
@@ -134,6 +144,7 @@ public class BlindBoxResultGenConsumer {
                     .openedAt(LocalDateTime.now())
                     .build();
             resultMapper.insert(result);
+            drawRecordService.record(order, prize);
 
             // 6. 更新订单状态 PROCESSING → OPENED
             orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
