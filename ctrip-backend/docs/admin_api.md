@@ -1,7 +1,7 @@
 # 趣行旅行平台 管理端 API（P1.1 + P1.2 + P1.3 + P1.4）
 
 > 前缀：`/api/v1/admin`
-> 认证：JWT Bearer Token；用户管理/盲盒模板/订单管理要求 `ADMIN`，攻略审核/评论管理/内容数据允许 `ADMIN` 与 `CONTENT_OPERATOR`。
+> 认证：JWT Bearer Token；用户管理/盲盒模板/订单管理/轮播图/推荐位/数据概览要求 `ADMIN`，攻略审核/评论管理/内容数据允许 `ADMIN` 与 `CONTENT_OPERATOR`。
 > 响应：统一 `ApiResponse<T>`（`success/data/error`）。
 
 ## 1. 权限与种子账号

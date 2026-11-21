@@ -62,11 +62,11 @@
 ## 三、后台管理模块
 
 1. **用户管理**：用户列表、信息查看、状态管理、标签分组
-2. **内容管理**：目的地、攻略、景点维护，内容审核~~、推荐位管理~~
+2. **内容管理**：目的地、攻略、景点维护，内容审核
 3. **产品管理**：盲盒类型配置（日常/限定）、价格策略、库存管理（限定盲盒限量）
 4. **订单管理**：订单查询、状态同步、退款处理
 5. **盲盒管理**：盲盒模板（日常/限定）、概率配置、活动规则、数据看板、限定盲盒抢购管理
-6. **运营管理**：轮播图、弹窗、Banner 管理，数据概览
+6. **运营管理**：轮播图、推荐位、弹窗管理，平台数据概览
 
 ---
 
@@ -322,6 +322,18 @@
 | 表名 | 说明 | 核心字段 |
 |------|------|---------|
 | `collection` | 收藏关系 | id, user_id(FK→users), target_type(guide/destination/itinerary), target_id, created_at |
+
+#### 运营模块（已实现，P1.4）
+
+| 表名 | 说明 | 核心字段 |
+|------|------|---------|
+| `banner` | 首页轮播图 | id, title, image_url, link_url, sort_order, status(ENABLED/DISABLED), start_at, end_at, created_at, updated_at |
+| `recommendation` | 首页推荐位 | id, slot, title, target_type(GUIDE/DESTINATION/BLIND_BOX_TEMPLATE), target_id, sort_order, status(ENABLED/DISABLED), start_at, end_at, created_at, updated_at |
+
+**运营内容说明**：
+- 公开接口 `GET /api/v1/banners`、`GET /api/v1/recommendations?slot=home_featured` 免登录，仅返回启用且处于时间窗内的记录
+- 推荐位按目标类型装配标题/封面/跳转链接；攻略未发布、盲盒已下架或目标缺失时跳过
+- 管理端 `/api/v1/admin/banners`、`/api/v1/admin/recommendations`、`/api/v1/admin/dashboard` 仅 `ADMIN` 可访问
 
 ---
 
