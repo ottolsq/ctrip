@@ -124,6 +124,12 @@ const routes = [
     meta: { title: '我的盲盒', requiresAuth: true }
   },
   {
+    path: '/blind-box/records',
+    name: 'MyDrawRecords',
+    component: () => import('@/views/blindbox/MyDrawRecords.vue'),
+    meta: { title: '我的抽取记录', requiresAuth: true }
+  },
+  {
     path: '/blind-box/:id',
     name: 'BlindBoxDetail',
     component: () => import('@/views/blindbox/BlindBoxDetail.vue'),

@@ -19,6 +19,20 @@ export function getBlindBoxTemplate(id) {
 }
 
 /**
+ * 概率公示
+ */
+export function getBlindBoxProbabilities(id) {
+  return request.get(`/v1/blind-box/${id}/probabilities`)
+}
+
+/**
+ * 我的抽取记录
+ */
+export function getMyDrawRecords(params) {
+  return request.get('/v1/blind-box/draw-records', { params })
+}
+
+/**
  * 我的盲盒列表
  */
 export function getMyBlindBoxes(params) {

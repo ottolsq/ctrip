@@ -67,6 +67,31 @@
         </el-row>
       </el-card>
 
+      <el-card v-if="probabilities" class="detail-card probability-card" shadow="never">
+        <template #header>
+          <h3>概率公示</h3>
+        </template>
+        <el-table :data="probabilities.tiers" style="width: 100%">
+          <el-table-column label="档位" width="140">
+            <template #default="{ row }">
+              <el-tag :type="tierTagType(row.tier)" size="small">{{ tierLabel(row.tier) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="概率" width="120">
+            <template #default="{ row }">{{ row.probability }}%</template>
+          </el-table-column>
+          <el-table-column label="可能目的地">
+            <template #default="{ row }">
+              {{ row.destinations?.length ? row.destinations.join('、') : '奖品池调整中' }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <p class="guarantee-tip">
+          连续 {{ probabilities.guaranteeCount }} 次未中稀有及以上，下一次必中稀有及以上。
+        </p>
+        <p class="version-tip">概率版本：{{ probabilities.probabilityVersion }}，实际抽取与公示一致。</p>
+      </el-card>
+
       <el-card class="detail-card" shadow="never">
         <template #header>
           <h3>详细介绍</h3>
@@ -85,7 +110,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBlindBoxTemplate } from '@/api/blindbox'
+import { getBlindBoxTemplate, getBlindBoxProbabilities } from '@/api/blindbox'
 import { ArrowLeft, Picture, ShoppingCart } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -94,6 +119,23 @@ const router = useRouter()
 
 const loading = ref(true)
 const template = ref(null)
+const probabilities = ref(null)
+
+const tierLabels = {
+  COMMON: '普通',
+  RARE: '稀有',
+  LEGENDARY: '传说'
+}
+
+function tierLabel(tier) {
+  return tierLabels[tier] || tier || '-'
+}
+
+function tierTagType(tier) {
+  if (tier === 'LEGENDARY') return 'danger'
+  if (tier === 'RARE') return 'warning'
+  return 'info'
+}
 
 function parseRuleConfig(raw) {
   if (!raw) return {}
@@ -130,6 +172,13 @@ onMounted(async () => {
   } catch (err) {
     template.value = null
     ElMessage.error('获取盲盒详情失败')
+  }
+
+  try {
+    const probabilityRes = await getBlindBoxProbabilities(id)
+    probabilities.value = probabilityRes.data
+  } catch {
+    probabilities.value = null
   } finally {
     loading.value = false
   }
@@ -148,6 +197,22 @@ onMounted(async () => {
 .main-card {
   margin-bottom: 24px;
   border-radius: 12px;
+}
+
+.probability-card {
+  margin-bottom: 24px;
+}
+
+.guarantee-tip {
+  margin: 16px 0 6px;
+  color: #e6a23c;
+  font-weight: 600;
+}
+
+.version-tip {
+  margin: 0;
+  color: #909399;
+  font-size: 12px;
 }
 
 .cover-wrapper {

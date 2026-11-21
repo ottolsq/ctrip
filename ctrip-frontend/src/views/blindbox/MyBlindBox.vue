@@ -2,6 +2,9 @@
   <div class="my-blind-box">
     <div class="page-header">
       <h1>我的盲盒</h1>
+      <el-button link type="primary" @click="router.push('/blind-box/records')">
+        抽取记录
+      </el-button>
     </div>
 
     <el-tabs v-model="activeTab" class="order-tabs" @tab-change="handleTabChange">
@@ -189,6 +192,9 @@ onMounted(() => {
 
   .page-header {
     margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 
     h1 {
       margin: 0;
