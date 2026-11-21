@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @EnableScheduling
-@MapperScan({"com.ctrip.user.mapper", "com.ctrip.content.mapper", "com.ctrip.itinerary.mapper", "com.ctrip.blindbox.mapper"})
+@MapperScan({"com.ctrip.user.mapper", "com.ctrip.content.mapper", "com.ctrip.itinerary.mapper", "com.ctrip.blindbox.mapper", "com.ctrip.operation.mapper"})
 public class CtripApplication {
 
 	public static void main(String[] args) {
