@@ -97,6 +97,9 @@ public class SecurityConfig {
                 // 模板详情仅 GET + 数字ID 公开（正则避免 /my、/orders 被误匹配为公开）
                 .requestMatchers(HttpMethod.GET, "/api/v1/blind-box/{id:\\d+}").permitAll()
                 .requestMatchers("/api/v1/itineraries/share/**").permitAll()
+                // 运营公开内容：首页轮播图/推荐位
+                .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/recommendations").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("ADMIN", "CONTENT_OPERATOR")
                 .anyRequest().authenticated()
             )
