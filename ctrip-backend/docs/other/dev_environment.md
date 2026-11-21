@@ -139,7 +139,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**109/109 通过**。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**127/127 通过**（P1.3 新增模板规则/活动窗口/后台订单测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -186,6 +186,16 @@ python -I ctrip-backend/scripts/e2e_admin_p12.py
 ```
 
 覆盖：作者创建/提交攻略 → 运营驳回（理由）→ 作者修改重提 → 运营通过 → 公共可见；编辑已发布转审核中；评论检索/删除；内容数据；普通用户访问管理端 403。
+
+### 7.5 盲盒后台 P1.3 E2E
+
+需先重启后端加载 P1.3 代码，并确保 RabbitMQ 正常（退款库存恢复经 MQ 异步完成）：
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p13.py
+```
+
+覆盖：DAILY 库存强制 -1；LIMITED 活动窗口/库存校验；非法模板 400；窗口内下单库存 5→4；窗口外下单 400；管理端订单列表/详情；退款后库存恢复 5 且仅恢复一次；重复退款、删除有订单模板 400；普通用户访问管理端 403。
 
 ## 8. 安全说明
 

@@ -19,8 +19,11 @@
 |------|------|------|
 | BlindBoxController | `/api/v1/blind-box/**` | 盲盒列表/详情/开盒入口 |
 | BlindBoxOrderController | `/api/v1/blind-box/orders/**` | 订单创建、查询、取消、开盒 |
-| AdminBlindBoxController | `/api/v1/admin/blind-box/**` | 后台模板管理 |
+| AdminBlindBoxController | `/api/v1/admin/blind-box/templates/**` | 后台模板管理 |
+| AdminBlindBoxOrderController | `/api/v1/admin/blind-box/orders/**` | 后台订单列表/详情/退款/重试 |
 | BlindBoxTemplateService | `com.ctrip.blindbox.service` | 模板管理与库存操作 |
+| AdminBlindBoxOrderService | `com.ctrip.blindbox.service` | 后台订单查询、退款、异常重试 |
+| BlindBoxRuleConfigParser | `com.ctrip.blindbox.rule` | ruleConfig 解析与活动窗口校验 |
 | BlindBoxOrderService | `com.ctrip.blindbox.service` | 订单创建、支付、超时取消 |
 | BlindBoxResultService | `com.ctrip.blindbox.service` | 结果生成、查询、分享 |
 | BlindBoxSchemeService | `com.ctrip.blindbox.service` | 盲盒方案生成（AI 预留接口） |
@@ -86,9 +89,11 @@
 ```
 
 **设计要点：**
-- `type = DAILY` 时 `stock` 必须为 `-1`，不检查库存
-- `type = LIMITED` 时 `stock > 0`，购买时需扣减库存，`stock = 0` 表示已售罄
-- 限定盲盒的活动时间通过 `ruleConfig` 配置，用于前端展示"限时抢购"标签
+- `type = DAILY` 时创建/更新强制 `stock = -1`，不检查库存
+- `type = LIMITED` 时创建要求 `stock >= 1`；`stock = 0` 表示已售罄，仍可改名/下架
+- 限定盲盒的 `ruleConfig`（JSON 字符串）必须包含 `activityStartTime/activityEndTime`，且开始早于结束
+- 下单时在扣库存前校验活动窗口（`BlindBoxRuleConfigParser.ensureActive`）
+- 存在关联订单的模板禁止删除（返回 400），应改为下架
 - 库存扣减参考 `docs/other/redis_rabbitmq_design.md` 第九章节方案
 
 ---
@@ -106,6 +111,8 @@
 | payMethod | String | 支付方式（"ALIPAY" / "WECHAT_PAY"，MVP阶段可null） |
 | payTime | LocalDateTime | 支付时间 |
 | expireAt | LocalDateTime | 支付超时时间（创建后15分钟） |
+| refundReason | String | 退款原因（后台退款时写入） |
+| refundedAt | LocalDateTime | 退款时间 |
 | createdAt | LocalDateTime | 创建时间（自动填充） |
 | updatedAt | LocalDateTime | 更新时间（自动填充） |
 
@@ -118,6 +125,7 @@
 | OPENED | 2 | 已开盒 |
 | REFUNDED | 3 | 已退款 |
 | CANCELLED | 4 | 已取消（超时未支付/用户主动取消） |
+| PROCESSING | 5 | 已支付，AI 方案生成中（异步开盒中间状态） |
 
 **设计要点：**
 - `orderNo` 为业务主键，格式 `BByyyyMMddXXXX`（如 `BB202606020001`），对外暴露使用此编号
@@ -296,13 +304,16 @@ blind_box_order (1) ──< blind_box_preference (1)
 
 1. 从 SecurityContext 获取当前 userId
 2. 验证模板是否存在且状态为 ACTIVE
-3. 验证模板类型：
-   - `DAILY`：无需检查库存
-   - `LIMITED`：检查库存 `stock > 0`，检查活动时间是否在有效期内
+3. 若为 `LIMITED`：
+   - 先校验活动窗口（`BlindBoxRuleConfigParser.ensureActive`，未开始/已结束/规则非法 → 400）
+   - 检查库存 `stock > 0`
+   - 扣减库存（分布式锁 + 条件 UPDATE，详见下方「库存扣减」）
 4. 创建订单（状态 = PENDING，expireAt = now + 15分钟）
 5. 保存预选参数到 `blind_box_preference`
-6. 若为限定盲盒，扣减库存（使用分布式锁 + 乐观锁，详见下方「库存扣减」）
+6. 发布 `ORDER_CREATED` 事件
 7. 返回订单信息
+
+> 库存扣减的唯一入口是订单创建；取消/退款只恢复一次，异步开盒消费者不扣库存。
 
 **请求参数：**
 ```json
@@ -549,9 +560,11 @@ WHERE id = ? AND stock >= 1;
 ### 8.4 库存恢复
 
 以下场景需要恢复库存（限定盲盒 stock + 1）：
-- 订单超时取消（15 分钟未支付）
-- 用户主动取消（仅 PENDING 状态）
-- 退款处理
+- 订单超时取消（15 分钟未支付）：`BlindBoxOrderServiceImpl` 同步恢复
+- 用户主动取消（仅 PENDING 状态）：`BlindBoxOrderServiceImpl` 同步恢复
+- 后台退款：事务提交后发送 `ORDER_REFUNDED`，由 `OrderStatusConsumer` 按 eventId 幂等恢复一次
+
+`incrementStock` 的 SQL 带 `AND stock >= 0`，因此日常盲盒（`stock = -1`）不会被误加为 0。
 
 ---
 
@@ -571,39 +584,39 @@ WHERE id = ? AND stock >= 1;
 
 ---
 
-## 🔄 十、事件驱动（未来，RabbitMQ）
+## 🔄 十、事件驱动（RabbitMQ，已实现）
 
-> MVP 阶段使用同步调用，后续接入 RabbitMQ 异步处理。
+> 事务性副作用（事件、缓存失效）统一通过 `AfterCommitExecutor` 在事务提交后执行。
 > 参考 `docs/other/redis_rabbitmq_design.md` 第三章节。
 
 ### 10.1 订单状态事件
 
-**Exchange/Topic：** `order.status.events`
+**Exchange：** `order.status.events`（Topic）
 
-**触发时机：** 订单创建、支付成功、开盒完成、取消、退款。
-
-**消费者组：**
-
-| 消费者组 | 职责 | 动作 |
-|---------|------|------|
-| `order-notification-service` | 用户通知 | 发送站内通知 + 短信 |
-| `blind-box-generation-service` | 盲盒方案生成 | 根据预选参数生成旅行方案 |
-| `inventory-deduction-service` | 库存扣减 | 扣减/恢复 blind_box_template.stock |
-| `order-analytics-service` | 业务统计 | 更新日销售额、订单量 |
-
-### 10.2 开盒事件
-
-**Exchange/Topic：** `blindbox.open.events`
-
-**触发时机：** 用户点击开盒。
+**触发时机：** 订单创建、支付成功、开盒完成、取消、退款（`ORDER_CREATED / ORDER_PAID / ORDER_OPENED / ORDER_CANCELLED / ORDER_REFUNDED`）。
 
 **消费者：**
 
-| 消费者 | 职责 | 动作 |
-|-------|------|------|
-| `result-generation-service` | AI 生成方案 | 调用 LLM API 生成旅行方案 |
-| `image-generation-service` | 可视化行程图 | **暂不实现**：AI 生成结果图 |
-| `notification-service` | 通知用户 | 推送"你的盲盒已就绪！" |
+| 队列 | 消费者 | 动作 |
+|------|--------|------|
+| `order.status.queue` | `OrderStatusConsumer` | 支付/取消日志；`ORDER_REFUNDED` 按 eventId 幂等恢复限定盲盒库存 |
+| `order.notification.queue` | `OrderNotificationConsumer` | 用户通知 |
+| `analytics.queue` | `AnalyticsConsumer` | 业务统计 |
+
+> 库存扣减没有独立消费者：只在创建订单时扣减一次，避免异步重复扣减。
+
+### 10.2 开盒事件
+
+**Exchange：** `blindbox.open.events`（Topic）
+
+**触发时机：** 用户开盒 / 后台异常重试（`BLINDBOX_OPEN_REQUESTED`）。
+
+**消费者：**
+
+| 队列 | 消费者 | 动作 |
+|------|--------|------|
+| `blindbox.result.gen.queue` | `BlindBoxResultGenConsumer` | 调用 AI 生成方案；失败回退 mock；写入结果并置 OPENED |
+| `blindbox.notification.queue` | `BlindBoxNotificationConsumer` | 推送开盒完成通知 |
 
 ---
 
@@ -619,15 +632,19 @@ WHERE id = ? AND stock >= 1;
 
 ### 11.2 防超卖
 
-- 乐观锁 SQL：`WHERE stock >= 1` 保证原子性
+- 条件 UPDATE：`WHERE id = ? AND stock >= 1` 保证原子性
 - 分布式锁：`lock:blindbox:stock:{templateId}` 防止并发竞争
-- 库存回滚：取消订单时 `stock + 1`
+- 库存只在创建订单时扣减一次；取消/超时同步恢复，退款经 MQ 幂等恢复
+- 恢复 SQL：`WHERE id = ? AND stock >= 0`，避免把日常盲盒的 `-1` 加为 `0`
 
 ### 11.3 幂等性
 
 - **开盒操作**：若已开盒，直接返回已有结果，不重复生成
 - **支付回调**：若订单已支付，直接返回成功
 - **取消订单**：若已取消，静默返回
+- **退款**：仅 PAID/OPENED 可退，`WHERE status IN (PAID, OPENED)` 条件更新，重复/并发退款 400
+- **退款库存恢复**：`OrderStatusConsumer` 以 eventId SETNX 幂等，只恢复一次
+- **异常重试**：仅 PROCESSING 可重试；消费者以 eventId 幂等，重复事件跳过
 
 ### 11.4 权限控制
 
@@ -636,8 +653,8 @@ WHERE id = ? AND stock >= 1;
 | 盲盒列表/详情 | 无需认证 | 公开展示 |
 | 创建订单/查询/开盒 | 需要 JWT | 用户操作 |
 | 分享结果查看 | 无需认证 | 公开分享链接 |
-| 模板 CRUD | 需要 JWT + ADMIN | 后台管理 |
-| 订单管理（全部用户） | 需要 JWT + ADMIN | 后台管理 |
+| 模板 CRUD | 需要 JWT + ADMIN | 后台管理（内容运营/普通用户 403） |
+| 订单管理（列表/详情/退款/重试） | 需要 JWT + ADMIN | 后台管理（内容运营/普通用户 403） |
 
 ---
 
@@ -675,11 +692,14 @@ WHERE id = ? AND stock >= 1;
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| GET | `/api/v1/admin/blind-box/templates` | ✅ ADMIN | 模板列表 |
+| GET | `/api/v1/admin/blind-box/templates` | ✅ ADMIN | 模板列表（type/status/keyword 筛选） |
 | POST | `/api/v1/admin/blind-box/templates` | ✅ ADMIN | 创建模板 |
 | PUT | `/api/v1/admin/blind-box/templates/{id}` | ✅ ADMIN | 更新模板 |
-| DELETE | `/api/v1/admin/blind-box/templates/{id}` | ✅ ADMIN | 删除模板 |
-| GET | `/api/v1/admin/blind-box/orders` | ✅ ADMIN | 全部订单列表（分页） |
+| DELETE | `/api/v1/admin/blind-box/templates/{id}` | ✅ ADMIN | 删除模板（有订单拒绝） |
+| GET | `/api/v1/admin/blind-box/orders` | ✅ ADMIN | 全部订单列表（分页/筛选） |
+| GET | `/api/v1/admin/blind-box/orders/{orderNo}` | ✅ ADMIN | 订单详情（含开盒结果） |
+| POST | `/api/v1/admin/blind-box/orders/{orderNo}/refund` | ✅ ADMIN | 退款（PAID/OPENED） |
+| POST | `/api/v1/admin/blind-box/orders/{orderNo}/retry-open` | ✅ ADMIN | 异常重试开盒（PROCESSING） |
 
 ---
 
@@ -691,10 +711,15 @@ src/main/java/com/ctrip/
     ├── controller/
     │   ├── BlindBoxController.java           # 前台盲盒列表/详情
     │   ├── BlindBoxOrderController.java      # 订单创建/查询/取消/开盒
-    │   └── AdminBlindBoxController.java      # 后台模板/订单管理
+    │   ├── AdminBlindBoxController.java      # 后台模板管理
+    │   └── AdminBlindBoxOrderController.java # 后台订单/退款/重试
+    ├── rule/
+    │   ├── ActivityWindow.java               # 活动窗口值对象
+    │   └── BlindBoxRuleConfigParser.java     # ruleConfig 解析/窗口校验
     ├── service/
     │   ├── BlindBoxTemplateService.java      # 模板服务接口
     │   ├── BlindBoxOrderService.java         # 订单服务接口
+    │   ├── AdminBlindBoxOrderService.java    # 后台订单服务接口
     │   ├── BlindBoxResultService.java        # 结果服务接口
     │   ├── BlindBoxPreferenceService.java    # 偏好服务接口
     │   ├── BlindBoxSchemeService.java        # 盲盒方案生成接口（AI 预留）

@@ -134,9 +134,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box?page=1&limit=20&type=DAILY"
         "type": "DAILY",
         "price": 99.00,
         "stock": -1,
-        "ruleConfig": {
-          "description": "日常随机旅行体验"
-        },
+        "ruleConfig": "{\"description\":\"日常随机旅行体验\"}",
         "status": "ACTIVE",
         "createdAt": "2026-06-01T10:00:00"
       },
@@ -146,19 +144,14 @@ curl -X GET "http://localhost:8080/api/v1/blind-box?page=1&limit=20&type=DAILY"
         "type": "LIMITED",
         "price": 199.00,
         "stock": 50,
-        "ruleConfig": {
-          "activityStartTime": "2026-07-01T00:00:00",
-          "activityEndTime": "2026-07-07T23:59:59",
-          "discount": 0.8,
-          "description": "夏日限定海岛盲盒"
-        },
+        "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\",\"discount\":0.8,\"description\":\"夏日限定海岛盲盒\"}",
         "status": "ACTIVE",
         "createdAt": "2026-06-01T10:00:00"
       }
     ],
     "total": 2,
-    "page": 1,
-    "limit": 20,
+    "current": 1,
+    "size": 20,
     "pages": 1
   },
   "error": null
@@ -174,7 +167,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box?page=1&limit=20&type=DAILY"
 | type | string | 盲盒类型：`DAILY` / `LIMITED` |
 | price | number | 价格（单位：元） |
 | stock | number | 库存数量（`-1` 表示不限量） |
-| ruleConfig | object | 规则配置（见 [ruleConfig 结构说明](#ruleconfig-结构说明)） |
+| ruleConfig | string | 规则配置 JSON 字符串（见 [ruleConfig 结构说明](#ruleconfig-结构说明)） |
 | status | string | 模板状态：`ACTIVE` / `INACTIVE` |
 | createdAt | string | 创建时间，ISO 8601 格式 |
 
@@ -385,25 +378,37 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders" \
 #### 失败响应
 
 ```json
-// 模板不存在或已下架 (400)
+// 模板不存在 (404)
 {
   "success": false,
   "data": null,
-  "error": "盲盒模板不存在或已下架"
+  "error": "盲盒模板不存在：id=1"
+}
+
+// 模板已下架 (400)
+{
+  "success": false,
+  "data": null,
+  "error": "盲盒已下架，无法购买"
 }
 
 // 限定盲盒库存不足 (400)
 {
   "success": false,
   "data": null,
-  "error": "限定盲盒库存不足"
+  "error": "库存不足"
 }
 
-// 限定盲盒活动未开始或已结束 (400)
+// 限定盲盒活动未开始 / 已结束 / 规则非法 (400)
 {
   "success": false,
   "data": null,
-  "error": "该限定盲盒活动尚未开始 / 已结束"
+  "error": "活动未开始"
+}
+{
+  "success": false,
+  "data": null,
+  "error": "活动已结束"
 }
 
 // 参数校验失败 (400)
@@ -1058,6 +1063,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 | limit | Integer | 否 | 每页条数，默认 20 |
 | type | String | 否 | 筛选盲盒类型：`DAILY` / `LIMITED` |
 | status | String | 否 | 筛选模板状态：`ACTIVE` / `INACTIVE` |
+| keyword | String | 否 | 名称模糊匹配 |
 
 #### 成功响应 (200)
 
@@ -1072,20 +1078,21 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
         "type": "DAILY",
         "price": 99.00,
         "stock": -1,
-        "ruleConfig": { "description": "日常随机旅行体验" },
+        "ruleConfig": "{\"description\":\"日常随机旅行体验\"}",
         "status": "ACTIVE",
-        "createdAt": "2026-06-01T10:00:00",
-        "updatedAt": "2026-06-01T10:00:00"
+        "createdAt": "2026-06-01T10:00:00"
       }
     ],
     "total": 1,
-    "page": 1,
-    "limit": 20,
+    "current": 1,
+    "size": 20,
     "pages": 1
   },
   "error": null
 }
 ```
+
+> `ruleConfig` 为 JSON 字符串，不是嵌套对象；前端/脚本需先序列化再提交。
 
 ---
 
@@ -1100,22 +1107,25 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 
 ```json
 {
-  "name": "日常旅行盲盒",
-  "type": "DAILY",
-  "price": 99.00,
-  "ruleConfig": {
-    "description": "日常随机旅行体验"
-  }
+  "name": "夏日限定盲盒",
+  "type": "LIMITED",
+  "price": 128.00,
+  "stock": 100,
+  "status": "ACTIVE",
+  "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\",\"discount\":0.8,\"description\":\"夏日限定海岛盲盒\"}"
 }
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| name | String | 是 | 盲盒名称，最长 100 位 |
+| name | String | 是 | 盲盒名称 |
 | type | String | 是 | 盲盒类型：`DAILY` / `LIMITED` |
 | price | BigDecimal | 是 | 价格（单位：元），必须 > 0 |
-| stock | Integer | 否 | 库存数量（`DAILY` 类型自动设为 `-1`） |
-| ruleConfig | Object | 否 | 规则配置（见 [ruleConfig 结构说明](#ruleconfig-结构说明)） |
+| stock | Integer | LIMITED 必填 | `DAILY` 强制写为 `-1`；`LIMITED` 必须 >= 1 |
+| ruleConfig | String | LIMITED 必填 | 规则 JSON 字符串（见 [ruleConfig 结构说明](#ruleconfig-结构说明)） |
+| status | String | 否 | `ACTIVE` / `INACTIVE` |
+
+> `LIMITED` 缺少活动时间、`stock < 1` 或规则 JSON 非法时返回 **400**。
 
 #### 请求示例
 
@@ -1124,12 +1134,12 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "日常旅行盲盒",
-    "type": "DAILY",
-    "price": 99.00,
-    "ruleConfig": {
-      "description": "日常随机旅行体验"
-    }
+    "name": "夏日限定盲盒",
+    "type": "LIMITED",
+    "price": 128.00,
+    "stock": 100,
+    "status": "ACTIVE",
+    "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\"}"
   }'
 ```
 
@@ -1140,16 +1150,13 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "success": true,
   "data": {
     "id": 3,
-    "name": "日常旅行盲盒",
-    "type": "DAILY",
-    "price": 99.00,
-    "stock": -1,
-    "ruleConfig": {
-      "description": "日常随机旅行体验"
-    },
+    "name": "夏日限定盲盒",
+    "type": "LIMITED",
+    "price": 128.00,
+    "stock": 100,
+    "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\"}",
     "status": "ACTIVE",
-    "createdAt": "2026-06-03T10:00:00",
-    "updatedAt": "2026-06-03T10:00:00"
+    "createdAt": "2026-06-03T10:00:00"
   },
   "error": null
 }
@@ -1165,11 +1172,18 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "error": "价格必须大于 0"
 }
 
-// 类型不匹配 (400)
+// 限定盲盒缺少活动时间 (400)
 {
   "success": false,
   "data": null,
-  "error": "DAILY 类型盲盒库存必须为 -1（不限量）"
+  "error": "活动规则配置不能为空"
+}
+
+// 限定盲盒库存不足 (400)
+{
+  "success": false,
+  "data": null,
+  "error": "限定盲盒库存必须大于 0"
 }
 ```
 
@@ -1196,23 +1210,21 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "name": "新盲盒名称",
   "price": 129.00,
   "stock": 100,
-  "ruleConfig": {
-    "activityStartTime": "2026-07-01T00:00:00",
-    "activityEndTime": "2026-07-07T23:59:59",
-    "discount": 0.8,
-    "description": "夏日限定海岛盲盒"
-  },
+  "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\",\"discount\":0.8,\"description\":\"夏日限定海岛盲盒\"}",
   "status": "INACTIVE"
 }
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| name | String | 否 | 盲盒名称，最长 100 位 |
+| name | String | 否 | 盲盒名称 |
+| type | String | 否 | 盲盒类型：`DAILY` / `LIMITED` |
 | price | BigDecimal | 否 | 价格（单位：元），必须 > 0 |
-| stock | Integer | 否 | 库存数量 |
-| ruleConfig | Object | 否 | 规则配置 |
+| stock | Integer | 否 | 库存数量，不能为负；`DAILY` 仍强制 `-1` |
+| ruleConfig | String | 否 | 规则 JSON 字符串 |
 | status | String | 否 | 模板状态：`ACTIVE` / `INACTIVE` |
+
+> 仅校验本次提交字段；售罄（`stock = 0`）的限定盲盒仍可改名/下架。
 
 #### 成功响应 (200)
 
@@ -1222,15 +1234,12 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "data": {
     "id": 1,
     "name": "新盲盒名称",
-    "type": "DAILY",
+    "type": "LIMITED",
     "price": 129.00,
-    "stock": -1,
-    "ruleConfig": {
-      "description": "日常随机旅行体验（已更新）"
-    },
-    "status": "ACTIVE",
-    "createdAt": "2026-06-01T10:00:00",
-    "updatedAt": "2026-06-03T12:00:00"
+    "stock": 0,
+    "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\"}",
+    "status": "INACTIVE",
+    "createdAt": "2026-06-01T10:00:00"
   },
   "error": null
 }
@@ -1258,7 +1267,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 
 ### 删除模板
 
-删除指定的盲盒模板（软删除）。
+删除指定的盲盒模板（物理删除）。存在关联订单时拒绝，应改为下架。
 
 - **URL**: `DELETE /api/v1/admin/blind-box/templates/{id}`
 - **认证**: 需要 JWT Token + ADMIN 角色
@@ -1274,9 +1283,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 ```json
 {
   "success": true,
-  "data": {
-    "message": "模板已删除"
-  },
+  "data": null,
   "error": null
 }
 ```
@@ -1288,14 +1295,14 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 {
   "success": false,
   "data": null,
-  "error": "盲盒模板不存在"
+  "error": "盲盒模板不存在：id=1"
 }
 
 // 模板下存在关联订单 (400)
 {
   "success": false,
   "data": null,
-  "error": "该模板下存在关联订单，无法删除"
+  "error": "存在关联订单，无法删除该模板"
 }
 ```
 
@@ -1303,7 +1310,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 
 ### 全部订单列表
 
-查询所有用户的盲盒订单，支持分页和状态筛选。
+查询所有用户的盲盒订单，支持分页和条件筛选。
 
 - **URL**: `GET /api/v1/admin/blind-box/orders`
 - **认证**: 需要 JWT Token + ADMIN 角色
@@ -1313,9 +1320,12 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | page | Integer | 否 | 页码，默认 1 |
-| limit | Integer | 否 | 每页条数，默认 20 |
-| status | String | 否 | 筛选订单状态 |
-| templateId | Long | 否 | 筛选模板 ID |
+| size | Integer | 否 | 每页条数，默认 10，最大 100 |
+| orderNo | String | 否 | 订单号模糊匹配 |
+| userId | Long | 否 | 用户 ID |
+| status | String | 否 | `PENDING` / `PAID` / `PROCESSING` / `OPENED` / `REFUNDED` / `CANCELLED` |
+| startDate | Date | 否 | 创建日期起（`yyyy-MM-dd`） |
+| endDate | Date | 否 | 创建日期止（`yyyy-MM-dd`） |
 
 #### 成功响应 (200)
 
@@ -1325,26 +1335,64 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "data": {
     "records": [
       {
+        "id": 100,
         "orderNo": "BB202606020001",
         "userId": 10,
-        "username": "张三",
+        "userName": "张三",
         "templateId": 1,
         "templateName": "日常旅行盲盒",
         "payAmount": 99.00,
-        "status": "PENDING",
+        "status": "PAID",
+        "payMethod": "ALIPAY",
+        "payTime": "2026-06-02T10:35:00",
         "expireAt": "2026-06-02T10:45:00",
-        "payTime": null,
-        "createdAt": "2026-06-02T10:30:00"
+        "createdAt": "2026-06-02T10:30:00",
+        "refundReason": null,
+        "refundedAt": null
       }
     ],
     "total": 1,
-    "page": 1,
-    "limit": 20,
+    "current": 1,
+    "size": 10,
     "pages": 1
   },
   "error": null
 }
 ```
+
+---
+
+### 订单详情
+
+`GET /api/v1/admin/blind-box/orders/{orderNo}`
+
+返回 `{ "order": AdminOrderResponse, "result": ResultResponse | null }`。
+`result.resultText` 为完整旅行方案 JSON 字符串；未开盒时 `result = null`。
+
+---
+
+### 订单退款
+
+`POST /api/v1/admin/blind-box/orders/{orderNo}/refund`
+
+```json
+{ "reason": "用户申请退款" }
+```
+
+- `reason` 必填、最长 500；
+- 仅 `PAID` / `OPENED` 可退款，否则 **400**；
+- 条件更新 `WHERE id = ? AND status IN (PAID, OPENED)`，并发/重复退款返回 **400**；
+- 更新为 `REFUNDED` 并写入 `refundReason/refundedAt`；
+- 事务提交后发送 `ORDER_REFUNDED`，消费者按 eventId 幂等恢复限定盲盒库存一次。
+
+---
+
+### 异常重试开盒
+
+`POST /api/v1/admin/blind-box/orders/{orderNo}/retry-open`
+
+- 仅 `PROCESSING` 订单可重试，否则 **400**；
+- 事务提交后重新发送 `BLINDBOX_OPEN_REQUESTED`。
 
 ---
 
@@ -1385,16 +1433,16 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 
 ### ruleConfig 结构说明
 
-`ruleConfig` 为 JSON 对象，用于配置盲盒的规则信息。
+`ruleConfig` 在数据库与 API 中均为 **JSON 字符串**（提交时需转义），解析后结构如下：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| activityStartTime | String | LIMITED 类型必填 | 活动开始时间，ISO 8601 格式 |
-| activityEndTime | String | LIMITED 类型必填 | 活动结束时间，ISO 8601 格式 |
+| activityStartTime | String | LIMITED 类型必填 | 活动开始时间，`LocalDateTime`（`yyyy-MM-ddTHH:mm:ss`） |
+| activityEndTime | String | LIMITED 类型必填 | 活动结束时间，必须晚于开始时间 |
 | discount | Number | 否 | 折扣系数（如 `0.8` 表示 8 折） |
 | description | String | 否 | 盲盒描述说明 |
 
-示例：
+解析后的示例：
 ```json
 {
   "activityStartTime": "2026-07-01T00:00:00",
@@ -1402,6 +1450,11 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
   "discount": 0.8,
   "description": "夏日限定海岛盲盒"
 }
+```
+
+提交到 API 时：
+```json
+"ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\"}"
 ```
 
 ### resultText 结构说明

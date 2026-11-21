@@ -1,7 +1,7 @@
-# 趣行旅行平台 管理端 API（P1.1 + P1.2）
+# 趣行旅行平台 管理端 API（P1.1 + P1.2 + P1.3）
 
 > 前缀：`/api/v1/admin`
-> 认证：JWT Bearer Token；用户管理/盲盒/订单/运营管理要求 `ADMIN`，攻略审核/评论管理/内容数据允许 `ADMIN` 与 `CONTENT_OPERATOR`。
+> 认证：JWT Bearer Token；用户管理/盲盒模板/订单管理要求 `ADMIN`，攻略审核/评论管理/内容数据允许 `ADMIN` 与 `CONTENT_OPERATOR`。
 > 响应：统一 `ApiResponse<T>`（`success/data/error`）。
 
 ## 1. 权限与种子账号
@@ -14,7 +14,7 @@
 种子账号由 `docs/SQL/ctrip_admin_seed.sql` 写入，仅限本地开发/答辩演示。
 
 - `/api/v1/admin/**` 的 URL 基线允许 ADMIN/CONTENT_OPERATOR；
-- 用户管理端点额外使用 `@PreAuthorize("hasRole('ADMIN')")`，内容运营访问返回 **403**。
+- 用户管理、盲盒模板、订单管理端点额外使用 `@PreAuthorize("hasRole('ADMIN')")`，内容运营/普通用户访问返回 **403**。
 
 ## 2. 用户列表
 
@@ -187,3 +187,122 @@
 ```
 
 `last7Days` 固定 7 项，缺失日期补 0。
+
+## 11. 盲盒模板管理（ADMIN）
+
+### 模板列表
+
+`GET /api/v1/admin/blind-box/templates?page&limit&type&status&keyword`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| limit | int | 否 | 每页条数，默认 20 |
+| type | string | 否 | `DAILY` / `LIMITED` |
+| status | string | 否 | `ACTIVE` / `INACTIVE` |
+| keyword | string | 否 | 名称模糊匹配 |
+
+响应项：`id, name, type, price, stock, ruleConfig, status, createdAt`；`ruleConfig` 为 JSON 字符串，原样返回。
+
+### 创建模板
+
+`POST /api/v1/admin/blind-box/templates`
+
+```json
+{
+  "name": "夏日限定盲盒",
+  "type": "LIMITED",
+  "price": 128.00,
+  "stock": 100,
+  "status": "ACTIVE",
+  "ruleConfig": "{\"activityStartTime\":\"2026-07-01T00:00:00\",\"activityEndTime\":\"2026-07-07T23:59:59\",\"description\":\"夏日海岛\",\"discount\":8.5}"
+}
+```
+
+- `DAILY`：`stock` 强制写为 `-1`（不限量），忽略传入库存；
+- `LIMITED`：`stock >= 1`，`ruleConfig` 必填且包含 `activityStartTime` / `activityEndTime`（ISO `LocalDateTime`，开始早于结束）；
+- 名称为空、价格 <= 0、限定库存不足或规则 JSON 非法 → **400**。
+
+### 更新模板
+
+`PUT /api/v1/admin/blind-box/templates/{id}`
+
+- 仅校验本次提交的字段；
+- `DAILY` 仍强制 `stock = -1`；
+- 限量模板 `stock >= 0`，因此售罄（`stock = 0`）后仍可改名/下架；
+- 修改类型为 `LIMITED` 或提交 `ruleConfig` 时校验活动窗口。
+
+### 删除模板
+
+`DELETE /api/v1/admin/blind-box/templates/{id}`
+
+- 模板不存在 → **404**；
+- 存在任意关联订单 → **400**（`存在关联订单，无法删除该模板`），应改为下架。
+
+## 12. 盲盒订单管理（ADMIN）
+
+### 订单列表
+
+`GET /api/v1/admin/blind-box/orders?page&size&orderNo&userId&status&startDate&endDate`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页数量，默认 10，最大 100 |
+| orderNo | string | 否 | 订单号模糊匹配 |
+| userId | long | 否 | 用户 ID |
+| status | string | 否 | `PENDING` / `PAID` / `PROCESSING` / `OPENED` / `REFUNDED` / `CANCELLED` |
+| startDate | date | 否 | 创建日期起（`yyyy-MM-dd`） |
+| endDate | date | 否 | 创建日期止（`yyyy-MM-dd`） |
+
+响应项：`id, orderNo, userId, userName, templateId, templateName, payAmount, status, payMethod, payTime, expireAt, createdAt, refundReason, refundedAt`。用户名/模板名按订单批量查询填充，缺失时为 `null`。
+
+### 订单详情
+
+`GET /api/v1/admin/blind-box/orders/{orderNo}`
+
+```json
+{
+  "order": { "orderNo": "BB202611210001", "status": "OPENED" },
+  "result": { "destination": "杭州", "theme": "古镇", "resultText": "{...}" }
+}
+```
+
+`result` 在未开盒时为 `null`；`result.resultText` 为完整方案 JSON 字符串。
+
+### 退款
+
+`POST /api/v1/admin/blind-box/orders/{orderNo}/refund`
+
+```json
+{ "reason": "用户申请退款" }
+```
+
+- `reason` 必填，最长 500；
+- 仅 `PAID` / `OPENED` 可退款，否则 **400**；
+- 使用 `WHERE id = ? AND status IN (PAID, OPENED)` 条件更新，置为 `REFUNDED` 并写入 `refundReason/refundedAt`；
+- 并发退款导致影响行数为 0 → **400**，不会重复退款；
+- 事务提交后发送 `ORDER_REFUNDED`；`OrderStatusConsumer` 按 eventId 幂等消费并恢复限定盲盒库存一次（`stock >= 0` 才 +1，日常盲盒不受影响）。
+
+### 异常重试开盒
+
+`POST /api/v1/admin/blind-box/orders/{orderNo}/retry-open`
+
+- 仅 `PROCESSING` 可重试，否则 **400**；
+- 事务提交后重新发送 `BLINDBOX_OPEN_REQUESTED`，由异步消费者重新生成方案。
+
+## 13. P1.3 错误码补充
+
+| HTTP | 场景 |
+|------|------|
+| 400 | 模板校验失败（名称/价格/库存/活动窗口）、有订单不可删、非 PAID/OPENED 退款、重复退款、非 PROCESSING 重试 |
+| 403 | 普通用户/内容运营访问模板或订单管理 |
+| 404 | 模板或订单不存在 |
+
+## 14. P1.3 E2E
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p13.py
+```
+
+覆盖：DAILY 库存 -1；LIMITED 窗口校验；非法模板 400；窗口内下单库存 5→4；窗口外下单 400；订单列表/详情；退款后库存恢复 5（仅一次）；重复退款/删除有订单模板 400；普通用户 403。
