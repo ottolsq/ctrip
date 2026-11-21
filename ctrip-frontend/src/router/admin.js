@@ -19,6 +19,16 @@ const adminRoutes = [
           roles: ['ADMIN', 'CONTENT_OPERATOR'],
           title: '数据概览'
         }
+      },
+      {
+        path: 'users',
+        name: 'AdminUserManage',
+        component: () => import('@/views/admin/UserManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '用户管理'
+        }
       }
     ]
   },
