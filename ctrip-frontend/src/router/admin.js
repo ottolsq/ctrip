@@ -16,7 +16,7 @@ const adminRoutes = [
         component: () => import('@/views/admin/DashboardView.vue'),
         meta: {
           requiresAuth: true,
-          roles: ['ADMIN', 'CONTENT_OPERATOR'],
+          roles: ['ADMIN'],
           title: '数据概览'
         }
       },

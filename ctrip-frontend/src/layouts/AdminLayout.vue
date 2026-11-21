@@ -14,7 +14,7 @@
         text-color="#c0c4cc"
         active-text-color="#409eff"
       >
-        <el-menu-item index="/admin/dashboard">
+        <el-menu-item v-if="userStore.isAdmin" index="/admin/dashboard">
           <el-icon><DataLine /></el-icon>
           <span>数据概览</span>
         </el-menu-item>
