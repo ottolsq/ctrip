@@ -25,13 +25,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,6 +104,17 @@ class DrawRecordServiceImplTest {
         assertThat(saved.getDestinationName()).isEqualTo("杭州");
         assertThat(saved.getGuaranteed()).isTrue();
         assertThat(saved.getProbabilityVersion()).isEqualTo("v1");
+    }
+
+    @Test
+    @DisplayName("落库：同一订单重复写入忽略唯一键冲突")
+    void record_duplicateOrder_shouldBeIgnored() {
+        doThrow(new DuplicateKeyException("dup"))
+                .when(recordMapper).insert(any(BlindBoxDrawRecord.class));
+
+        assertThatCode(() -> service.record(
+                order(), new DrawnPrize("RARE", 3L, "杭州", false, "v1")))
+                .doesNotThrowAnyException();
     }
 
     @Test

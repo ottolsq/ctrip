@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -45,7 +47,9 @@ public class RabbitMQConfig {
     public static final String ORDER_NOTIFICATION_QUEUE = "order.notification.queue";
 
     // 盲盒开盒
-    public static final String BLINDBOX_RESULT_GEN_QUEUE = "blindbox.result.gen.queue";
+    // v2：新增死信参数后使用新队列名，避免旧队列无 DLX 参数导致声明冲突；
+    // 旧队列可由运维确认清空后删除。
+    public static final String BLINDBOX_RESULT_GEN_QUEUE = "blindbox.result.gen.v2.queue";
     public static final String BLINDBOX_NOTIFICATION_QUEUE = "blindbox.notification.queue";
 
     // 用户活动
@@ -101,6 +105,13 @@ public class RabbitMQConfig {
         factory.setConcurrentConsumers(2);
         factory.setMaxConcurrentConsumers(10);
         factory.setPrefetchCount(10);
+        // 消费失败重试 3 次；最终拒绝且不重新入队，由队列 DLX 转入死信队列
+        factory.setDefaultRequeueRejected(false);
+        factory.setAdviceChain(RetryInterceptorBuilder.stateless()
+                .maxAttempts(3)
+                .backOffOptions(1000, 2.0, 5000)
+                .recoverer(new RejectAndDontRequeueRecoverer())
+                .build());
         return factory;
     }
 
@@ -160,7 +171,10 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue blindboxResultGenQueue() {
-        return QueueBuilder.durable(BLINDBOX_RESULT_GEN_QUEUE).build();
+        return QueueBuilder.durable(BLINDBOX_RESULT_GEN_QUEUE)
+                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", ORDER_STATUS_DLQ)
+                .build();
     }
 
     @Bean

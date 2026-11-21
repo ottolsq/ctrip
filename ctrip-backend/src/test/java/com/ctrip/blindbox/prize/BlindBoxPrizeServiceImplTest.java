@@ -1,8 +1,10 @@
 package com.ctrip.blindbox.prize;
 
 import com.ctrip.blindbox.dto.ProbabilityResponse;
+import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.content.entity.Destination;
 import com.ctrip.content.mapper.DestinationMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,7 +67,14 @@ class BlindBoxPrizeServiceImplTest {
 
     private BlindBoxPrizeServiceImpl service(double roll) {
         return new BlindBoxPrizeServiceImpl(
-                properties, redisTemplate, redissonClient, destinationMapper, () -> roll);
+                properties, redisTemplate, redissonClient, destinationMapper,
+                new ObjectMapper(), () -> roll);
+    }
+
+    private BlindBoxOrder order() {
+        return BlindBoxOrder.builder()
+                .id(100L).userId(1L).templateId(9L)
+                .build();
     }
 
     private void mockLock() throws InterruptedException {
@@ -94,21 +103,24 @@ class BlindBoxPrizeServiceImplTest {
     @Test
     @DisplayName("公示概率：归一化两位小数并过滤不存在的目的地")
     void getProbabilities_shouldNormalizeAndExcludeMissingDestinations() {
-        when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(
-                destination(1L, "杭州"), destination(2L, "北京"), destination(5L, "巴厘岛")));
+        when(destinationMapper.selectBatchIds(List.of(1L, 2L, 3L)))
+                .thenReturn(List.of(destination(1L, "杭州"), destination(2L, "北京")));
+        when(destinationMapper.selectBatchIds(List.of(4L))).thenReturn(List.of());
+        when(destinationMapper.selectBatchIds(List.of(5L)))
+                .thenReturn(List.of(destination(5L, "巴厘岛")));
 
         ProbabilityResponse response = service(0.0).getProbabilities();
 
         assertThat(response.guaranteeCount()).isEqualTo(10);
         assertThat(response.probabilityVersion()).isEqualTo("v1");
-        assertThat(response.tiers()).hasSize(3);
+        // RARE 的唯一目的地 4 不存在，因此不参与公示与抽取，概率按可用档位归一化
+        assertThat(response.tiers()).hasSize(2);
         assertThat(response.tiers().get(0).tier()).isEqualTo("COMMON");
-        assertThat(response.tiers().get(0).probability()).isEqualByComparingTo("70.00");
+        assertThat(response.tiers().get(0).probability()).isEqualByComparingTo("93.33");
         assertThat(response.tiers().get(0).destinations()).containsExactly("杭州", "北京");
-        assertThat(response.tiers().get(1).probability()).isEqualByComparingTo("25.00");
-        assertThat(response.tiers().get(1).destinations()).isEmpty();
-        assertThat(response.tiers().get(2).probability()).isEqualByComparingTo("5.00");
-        assertThat(response.tiers().get(2).destinations()).containsExactly("巴厘岛");
+        assertThat(response.tiers().get(1).tier()).isEqualTo("LEGENDARY");
+        assertThat(response.tiers().get(1).probability()).isEqualByComparingTo("6.67");
+        assertThat(response.tiers().get(1).destinations()).containsExactly("巴厘岛");
     }
 
     @Test
@@ -116,11 +128,12 @@ class BlindBoxPrizeServiceImplTest {
     void draw_guaranteeAfterTenMisses_shouldForceRareOrLegendary() throws InterruptedException {
         mockLock();
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("blindbox:draw:100")).thenReturn(null);
         when(valueOperations.get("blindbox:guarantee:9:1")).thenReturn("10");
         when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(
                 destination(4L, "京都"), destination(5L, "巴厘岛")));
 
-        DrawnPrize prize = service(0.0).draw(1L, 9L);
+        DrawnPrize prize = service(0.0).draw(order());
 
         assertThat(prize.tier()).isEqualTo("RARE");
         assertThat(prize.destinationId()).isEqualTo(4L);
@@ -134,10 +147,11 @@ class BlindBoxPrizeServiceImplTest {
     void draw_rareHit_shouldResetCounter() throws InterruptedException {
         mockLock();
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("blindbox:draw:100")).thenReturn(null);
         when(valueOperations.get("blindbox:guarantee:9:1")).thenReturn("3");
         when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(destination(5L, "巴厘岛")));
 
-        DrawnPrize prize = service(0.99).draw(1L, 9L);
+        DrawnPrize prize = service(0.99).draw(order());
 
         assertThat(prize.tier()).isEqualTo("LEGENDARY");
         assertThat(prize.guaranteed()).isFalse();
@@ -149,17 +163,35 @@ class BlindBoxPrizeServiceImplTest {
     void draw_common_shouldIncrementCounterWithTtl() throws InterruptedException {
         mockLock();
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("blindbox:draw:100")).thenReturn(null);
         when(valueOperations.get("blindbox:guarantee:9:1")).thenReturn("3");
         when(valueOperations.increment("blindbox:guarantee:9:1")).thenReturn(4L);
         when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(
                 destination(1L, "杭州"), destination(2L, "北京")));
 
-        DrawnPrize prize = service(0.1).draw(1L, 9L);
+        DrawnPrize prize = service(0.1).draw(order());
 
         assertThat(prize.tier()).isEqualTo("COMMON");
         assertThat(prize.guaranteed()).isFalse();
         verify(valueOperations).increment("blindbox:guarantee:9:1");
         verify(valueOperations).set("blindbox:guarantee:9:1", "4", 180, TimeUnit.DAYS);
+        verify(redisTemplate, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("同一订单重复抽取：返回缓存结果且不再改计数")
+    void draw_cachedResult_shouldReturnSameWithoutCounterMutation() throws InterruptedException {
+        mockLock();
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("blindbox:draw:100")).thenReturn(
+                "{\"tier\":\"RARE\",\"destinationId\":4,\"destinationName\":\"京都\","
+                        + "\"guaranteed\":false,\"probabilityVersion\":\"v1\"}");
+
+        DrawnPrize prize = service(0.1).draw(order());
+
+        assertThat(prize.tier()).isEqualTo("RARE");
+        assertThat(prize.destinationId()).isEqualTo(4L);
+        verify(valueOperations, never()).increment(anyString());
         verify(redisTemplate, never()).delete(anyString());
     }
 }

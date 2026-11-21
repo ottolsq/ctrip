@@ -14,6 +14,9 @@ import com.ctrip.blindbox.prize.PrizeTier;
 import com.ctrip.blindbox.service.DrawRecordService;
 import com.ctrip.user.entity.User;
 import com.ctrip.user.mapper.UserMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +35,7 @@ import java.util.stream.Collectors;
 @Service
 public class DrawRecordServiceImpl implements DrawRecordService {
 
+    private static final Logger log = LoggerFactory.getLogger(DrawRecordServiceImpl.class);
     private static final int MAX_PAGE_SIZE = 100;
 
     private final BlindBoxDrawRecordMapper recordMapper;
@@ -52,16 +56,21 @@ public class DrawRecordServiceImpl implements DrawRecordService {
     @Override
     @Transactional
     public void record(BlindBoxOrder order, DrawnPrize prize) {
-        recordMapper.insert(BlindBoxDrawRecord.builder()
-                .orderId(order.getId())
-                .userId(order.getUserId())
-                .templateId(order.getTemplateId())
-                .tier(PrizeTier.valueOf(prize.tier()))
-                .destinationId(prize.destinationId())
-                .destinationName(prize.destinationName())
-                .guaranteed(prize.guaranteed())
-                .probabilityVersion(prize.probabilityVersion())
-                .build());
+        try {
+            recordMapper.insert(BlindBoxDrawRecord.builder()
+                    .orderId(order.getId())
+                    .userId(order.getUserId())
+                    .templateId(order.getTemplateId())
+                    .tier(PrizeTier.valueOf(prize.tier()))
+                    .destinationId(prize.destinationId())
+                    .destinationName(prize.destinationName())
+                    .guaranteed(prize.guaranteed())
+                    .probabilityVersion(prize.probabilityVersion())
+                    .build());
+        } catch (DuplicateKeyException e) {
+            // 同一订单重试时已有记录，保持幂等
+            log.debug("抽取记录已存在，跳过: orderId={}", order.getId());
+        }
     }
 
     @Override

@@ -93,7 +93,7 @@ public class BlindBoxResultGenConsumer {
      * <p>消费 {@code blindbox.result.gen.queue} 中的 BLINDBOX_OPEN_REQUESTED 事件。
      * AI 调用可能耗时 5-20s，此过程不阻塞任何用户请求。
      */
-    @RabbitListener(queues = "blindbox.result.gen.queue")
+    @RabbitListener(queues = com.ctrip.config.RabbitMQConfig.BLINDBOX_RESULT_GEN_QUEUE)
     @Transactional
     public void onOpenRequested(BlindBoxOpenEvent event) {
         log.info("收到开盒请求: eventId={}, orderId={}", event.eventId(), event.orderId());
@@ -122,7 +122,7 @@ public class BlindBoxResultGenConsumer {
 
             // 3. 先按公示概率抽奖，再固定目的地生成方案（核心耗时操作）
             BlindBoxPreference preference = preferenceService.getByOrderId(order.getId());
-            DrawnPrize prize = prizeService.draw(order.getUserId(), order.getTemplateId());
+            DrawnPrize prize = prizeService.draw(order);
             SchemeResponse scheme = schemeService.generateScheme(preference, prize);
 
             // 4. 序列化方案为 JSON 存入结果表
@@ -168,6 +168,12 @@ public class BlindBoxResultGenConsumer {
             // 更新幂等状态
             stringRedisTemplate.opsForValue().set(idempotentKey, "completed", IDEMPOTENT_TTL);
 
+        } catch (com.ctrip.common.exception.BusinessException e) {
+            // 配置/奖品池等确定性错误：不再无限重投，进入死信队列等待人工处理
+            stringRedisTemplate.delete(idempotentKey);
+            log.error("开盒业务失败，转死信: eventId={}, orderId={}, error={}",
+                    event.eventId(), event.orderId(), e.getMessage());
+            throw new org.springframework.amqp.AmqpRejectAndDontRequeueException(e);
         } catch (Exception e) {
             // 释放幂等锁，让 MQ 重试
             stringRedisTemplate.delete(idempotentKey);

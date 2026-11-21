@@ -2,9 +2,12 @@ package com.ctrip.blindbox.prize;
 
 import com.ctrip.blindbox.dto.ProbabilityResponse;
 import com.ctrip.blindbox.dto.TierProbabilityResponse;
+import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.content.entity.Destination;
 import com.ctrip.content.mapper.DestinationMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,15 +17,10 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.DoubleSupplier;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * 盲盒概率与保底抽取实现。
@@ -31,20 +29,23 @@ import java.util.stream.Collectors;
 public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
 
     private static final String GUARANTEE_KEY_PREFIX = "blindbox:guarantee:";
+    private static final String DRAW_KEY_PREFIX = "blindbox:draw:";
     private static final String LOCK_KEY_PREFIX = "lock:blindbox:prize:";
 
     private final PrizeProperties properties;
     private final StringRedisTemplate redisTemplate;
     private final RedissonClient redissonClient;
     private final DestinationMapper destinationMapper;
+    private final ObjectMapper objectMapper;
     private final DoubleSupplier random;
 
     @Autowired
     public BlindBoxPrizeServiceImpl(PrizeProperties properties,
                                     StringRedisTemplate redisTemplate,
                                     RedissonClient redissonClient,
-                                    DestinationMapper destinationMapper) {
-        this(properties, redisTemplate, redissonClient, destinationMapper,
+                                    DestinationMapper destinationMapper,
+                                    ObjectMapper objectMapper) {
+        this(properties, redisTemplate, redissonClient, destinationMapper, objectMapper,
                 () -> ThreadLocalRandom.current().nextDouble());
     }
 
@@ -52,38 +53,33 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
                              StringRedisTemplate redisTemplate,
                              RedissonClient redissonClient,
                              DestinationMapper destinationMapper,
+                             ObjectMapper objectMapper,
                              DoubleSupplier random) {
         this.properties = properties;
         this.redisTemplate = redisTemplate;
         this.redissonClient = redissonClient;
         this.destinationMapper = destinationMapper;
+        this.objectMapper = objectMapper;
         this.random = random;
     }
 
     @Override
     public ProbabilityResponse getProbabilities() {
-        List<PrizeProperties.TierConfig> tiers = properties.getTiers();
-        int totalWeight = tiers.stream()
-                .filter(tier -> tier.getTier() != null)
+        List<PrizeProperties.TierConfig> available = availableTiers(false);
+        int totalWeight = available.stream()
                 .mapToInt(PrizeProperties.TierConfig::getWeight)
-                .filter(weight -> weight > 0)
                 .sum();
 
-        Map<Long, Destination> destinations = loadDestinations(allDestinationIds(tiers));
-
-        List<TierProbabilityResponse> responses = tiers.stream()
-                .filter(tier -> tier.getTier() != null)
+        List<TierProbabilityResponse> responses = available.stream()
                 .map(tier -> {
+                    List<Destination> destinations = destinationsFor(tier);
                     BigDecimal probability = totalWeight == 0
                             ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
                             : BigDecimal.valueOf(tier.getWeight() * 100.0 / totalWeight)
                                     .setScale(2, RoundingMode.HALF_UP);
-                    List<String> names = tier.getDestinationIds().stream()
-                            .map(destinations::get)
-                            .filter(java.util.Objects::nonNull)
-                            .map(Destination::getName)
-                            .toList();
-                    return new TierProbabilityResponse(tier.getTier().name(), probability, names);
+                    return new TierProbabilityResponse(
+                            tier.getTier().name(), probability,
+                            destinations.stream().map(Destination::getName).toList());
                 })
                 .toList();
 
@@ -92,14 +88,26 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
     }
 
     @Override
-    public DrawnPrize draw(Long userId, Long templateId) {
-        RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + templateId + ":" + userId);
+    public DrawnPrize draw(BlindBoxOrder order) {
+        RLock lock = redissonClient.getLock(
+                LOCK_KEY_PREFIX + order.getTemplateId() + ":" + order.getUserId());
         try {
             if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
                 throw new BusinessException("系统繁忙，请稍后重试");
             }
             try {
-                return doDraw(userId, templateId);
+                String cacheKey = DRAW_KEY_PREFIX + order.getId();
+                String cached = redisTemplate.opsForValue().get(cacheKey);
+                if (cached != null) {
+                    return objectMapper.readValue(cached, DrawnPrize.class);
+                }
+
+                DrawnPrize prize = doDraw(order.getUserId(), order.getTemplateId());
+                redisTemplate.opsForValue().set(
+                        cacheKey, objectMapper.writeValueAsString(prize), 7, TimeUnit.DAYS);
+                return prize;
+            } catch (JsonProcessingException e) {
+                throw new BusinessException("抽取结果缓存失败");
             } finally {
                 if (lock.isHeldByCurrentThread()) {
                     lock.unlock();
@@ -117,16 +125,20 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
         int misses = parseCount(counter);
         boolean guaranteed = misses >= properties.getGuaranteeCount();
 
-        List<PrizeProperties.TierConfig> candidates = properties.getTiers().stream()
-                .filter(tier -> tier.getTier() != null)
-                .filter(tier -> !guaranteed || tier.getTier().atLeastRare())
-                .toList();
+        List<PrizeProperties.TierConfig> candidates = availableTiers(guaranteed);
         if (candidates.isEmpty()) {
-            throw new BusinessException("盲盒概率配置缺失");
+            throw new BusinessException("盲盒奖品池未配置可用目的地");
         }
 
         PrizeTier tier = selectTier(random.getAsDouble(), candidates);
-        Destination destination = pickDestination(tier);
+        PrizeProperties.TierConfig selected = candidates.stream()
+                .filter(item -> item.getTier() == tier)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("盲盒概率配置缺失"));
+        List<Destination> destinations = destinationsFor(selected);
+        int index = Math.min(
+                (int) (random.getAsDouble() * destinations.size()), destinations.size() - 1);
+        Destination destination = destinations.get(index);
 
         if (tier.atLeastRare()) {
             redisTemplate.delete(guaranteeKey);
@@ -169,36 +181,32 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
         return tiers.getLast().getTier();
     }
 
-    private Destination pickDestination(PrizeTier tier) {
-        PrizeProperties.TierConfig config = properties.getTiers().stream()
-                .filter(item -> item.getTier() == tier)
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("盲盒概率配置缺失"));
-
-        List<Destination> destinations = destinationMapper.selectBatchIds(config.getDestinationIds());
-        if (destinations == null || destinations.isEmpty()) {
-            // 配置池中的目的地被删除时，降级到全部奖品池，避免无法开盒
-            destinations = destinationMapper.selectBatchIds(allDestinationIds(properties.getTiers()));
+    /**
+     * 仅保留配置了有效目的地的档位；公开概率与实际抽取共用，保证口径一致。
+     */
+    private List<PrizeProperties.TierConfig> availableTiers(boolean rareOnly) {
+        List<PrizeProperties.TierConfig> available = new ArrayList<>();
+        for (PrizeProperties.TierConfig tier : properties.getTiers()) {
+            if (tier.getTier() == null || tier.getWeight() <= 0) {
+                continue;
+            }
+            if (rareOnly && !tier.getTier().atLeastRare()) {
+                continue;
+            }
+            if (!destinationsFor(tier).isEmpty()) {
+                available.add(tier);
+            }
         }
-        if (destinations == null || destinations.isEmpty()) {
-            throw new BusinessException("盲盒奖品池未配置可用目的地");
-        }
-        int index = Math.min((int) (random.getAsDouble() * destinations.size()), destinations.size() - 1);
-        return destinations.get(index);
+        return available;
     }
 
-    private Set<Long> allDestinationIds(List<PrizeProperties.TierConfig> tiers) {
-        return tiers.stream()
-                .flatMap(tier -> tier.getDestinationIds().stream())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-    }
-
-    private Map<Long, Destination> loadDestinations(Set<Long> ids) {
-        if (ids.isEmpty()) {
-            return Map.of();
+    private List<Destination> destinationsFor(PrizeProperties.TierConfig tier) {
+        List<Long> ids = tier.getDestinationIds();
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
         }
-        return destinationMapper.selectBatchIds(ids).stream()
-                .collect(Collectors.toMap(Destination::getId, Function.identity(), (a, b) -> a));
+        List<Destination> destinations = destinationMapper.selectBatchIds(ids);
+        return destinations == null ? List.of() : destinations;
     }
 
     private int parseCount(String value) {
