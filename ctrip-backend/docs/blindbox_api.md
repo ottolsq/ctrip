@@ -1069,7 +1069,9 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 ```
 
 - 实际抽取使用同一权重配置，概率版本随抽取记录留痕；
-- 连续 `guaranteeCount` 次未中 `RARE`/`LEGENDARY`，下一次强制从稀有及以上档位按权重抽取。
+- 连续 `guaranteeCount` 次未中 `RARE`/`LEGENDARY`，下一次强制从稀有及以上档位按权重抽取；
+- 目的地池为空的档位不会出现在响应中，剩余档位按权重重新归一化（保证合计 100%）；
+- 同一订单重复开盒请求使用同一抽奖结果（Redis 幂等缓存），不会重复消耗保底计数。
 
 ### 我的抽取记录
 

@@ -78,7 +78,7 @@
             </template>
           </el-table-column>
           <el-table-column label="概率" width="120">
-            <template #default="{ row }">{{ row.probability }}%</template>
+            <template #default="{ row }">{{ Number(row.probability).toFixed(2) }}%</template>
           </el-table-column>
           <el-table-column label="可能目的地">
             <template #default="{ row }">

@@ -331,7 +331,7 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 
 覆盖：DAILY 库存 -1；LIMITED 窗口校验；非法模板 400；窗口内下单库存 5→4；窗口外下单 400；订单列表/详情；退款后库存恢复 5（仅一次）；重复退款/删除有订单模板 400；普通用户 403。
 
-## 15. 轮播图管理（ADMIN）
+## 16. 轮播图管理（ADMIN）
 
 ### 管理端
 
@@ -364,7 +364,7 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 
 仅返回 `status=ENABLED` 且当前时间处于 `[startAt, endAt]`（空表示不限）的记录，按 `sortOrder` 升序；无数据返回空数组，首页据此隐藏轮播区。
 
-## 16. 推荐位管理（ADMIN）
+## 17. 推荐位管理（ADMIN）
 
 ### 管理端
 
@@ -405,7 +405,7 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 
 攻略必须 `PUBLISHED`、盲盒模板必须 `ACTIVE`，目标缺失/未发布/已下架时跳过，不产生死链。
 
-## 17. 平台数据概览（ADMIN）
+## 18. 平台数据概览（ADMIN）
 
 `GET /api/v1/admin/dashboard`
 
@@ -435,7 +435,7 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 - `last7Days` 固定 7 项，缺失日期补 0；
 - `totalSales` 仅统计 `PAID / PROCESSING / OPENED` 的 `payAmount`，退款/取消不计。
 
-## 18. P1.4 E2E
+## 19. P1.4 E2E
 
 ```bash
 python -I ctrip-backend/scripts/e2e_admin_p14.py

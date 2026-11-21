@@ -625,7 +625,7 @@ WHERE id = ? AND stock >= 1;
 
 | 队列 | 消费者 | 动作 |
 |------|--------|------|
-| `blindbox.result.gen.queue` | `BlindBoxResultGenConsumer` | 调用 AI 生成方案；失败回退 mock；写入结果并置 OPENED |
+| `blindbox.result.gen.v2.queue` | `BlindBoxResultGenConsumer` | 先按订单幂等抽奖，再固定目的地生成方案；写入结果/抽取记录并置 OPENED；失败重试 3 次后转死信 |
 | `blindbox.notification.queue` | `BlindBoxNotificationConsumer` | 推送开盒完成通知 |
 
 ---
