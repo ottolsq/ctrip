@@ -55,6 +55,12 @@ public class BlindBoxOrder {
     /** 支付超时时间（创建后15分钟） */
     private LocalDateTime expireAt;
 
+    /** 退款原因（后台退款时填写） */
+    private String refundReason;
+
+    /** 退款时间 */
+    private LocalDateTime refundedAt;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
