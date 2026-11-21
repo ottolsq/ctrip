@@ -46,8 +46,11 @@ bash deploy/start.sh
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/api/v1/banners
-BASE_URL=http://localhost:8088/api/v1 python -I ctrip-backend/scripts/e2e_admin_p14.py
+BASE_URL=http://127.0.0.1:8088/api/v1 python -I ctrip-backend/scripts/e2e_admin_p14.py
 ```
+
+> Python/urllib 访问 `localhost` 时可能先尝试 IPv6 并等待约 20 秒再回退，
+> 脚本/压测请显式使用 `127.0.0.1`；浏览器访问 `localhost` 不受影响。
 
 ## 停止
 

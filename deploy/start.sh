@@ -37,7 +37,7 @@ fi
 WSL_ROOT="$(echo "$ROOT" | sed -E 's#^/([a-zA-Z])/#/mnt/\L\1/#')"
 WSL_DIST="$(echo "$DIST" | sed -E 's#^/([a-zA-Z])/#/mnt/\L\1/#')"
 echo "==> 启动 WSL nginx（8088）"
-wsl.exe -d Ubuntu-24.04 -- bash "$WSL_ROOT/deploy/nginx/start-nginx.sh" "$WSL_DIST"
+MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -- bash "$WSL_ROOT/deploy/nginx/start-nginx.sh" "$WSL_DIST"
 
 for _ in $(seq 1 20); do
   if curl -sf "http://localhost:8088/" >/dev/null 2>&1; then
