@@ -11,6 +11,7 @@ import com.ctrip.common.response.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -84,6 +85,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Void> handleForbidden(ForbiddenException ex) {
         return ApiResponse.error(ex.getMessage());
+    }
+
+    /**
+     * Spring Security 方法级权限拒绝：403。
+     *
+     * <p>{@code @PreAuthorize} 拒绝时抛出 {@code AuthorizationDeniedException}
+     * （继承自 {@link AccessDeniedException}），若不单独处理会被兜底映射为 500。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleAccessDenied(AccessDeniedException ex) {
+        return ApiResponse.error("权限不足");
     }
 
     /** 参数非法：400（日期校验、枚举非法值等）。 */
