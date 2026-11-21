@@ -1,15 +1,25 @@
 <template>
   <div class="home">
-    <!-- 轮播 Banner -->
-    <el-carousel class="banner-carousel" :interval="4000" arrow="always">
+    <!-- 轮播 Banner：无启用数据时隐藏 -->
+    <el-carousel
+      v-if="banners.length"
+      class="banner-carousel"
+      :interval="4000"
+      arrow="always"
+    >
       <el-carousel-item v-for="banner in banners" :key="banner.id">
-        <div class="banner-item" :style="{ background: banner.bgColor }">
+        <div
+          class="banner-item"
+          :class="{ clickable: banner.linkUrl }"
+          @click="handleLinkClick(banner.linkUrl)"
+        >
+          <el-image :src="banner.imageUrl" fit="cover" class="banner-image">
+            <template #error>
+              <div class="banner-fallback"></div>
+            </template>
+          </el-image>
           <div class="banner-content">
             <h2>{{ banner.title }}</h2>
-            <p>{{ banner.subtitle }}</p>
-            <el-button type="warning" size="large" @click="handleBannerClick(banner)">
-              {{ banner.btnText }}
-            </el-button>
           </div>
         </div>
       </el-carousel-item>
@@ -73,6 +83,42 @@
       </el-row>
     </section>
 
+    <!-- 精选推荐：无启用数据时隐藏 -->
+    <section v-if="recommendations.length" class="section">
+      <div class="section-header">
+        <h2>精选推荐</h2>
+      </div>
+      <el-row :gutter="20">
+        <el-col
+          v-for="item in recommendations"
+          :key="item.id"
+          :xs="24"
+          :sm="12"
+          :md="8"
+        >
+          <div class="recommendation-card" @click="handleLinkClick(item.linkUrl)">
+            <div class="guide-img-wrapper">
+              <el-image
+                :src="item.coverUrl || '/placeholder-guide.jpg'"
+                fit="cover"
+                class="guide-img"
+              >
+                <template #error>
+                  <div class="img-placeholder">
+                    <el-icon :size="28"><Star /></el-icon>
+                  </div>
+                </template>
+              </el-image>
+            </div>
+            <div class="guide-info">
+              <h3>{{ item.targetTitle || item.title }}</h3>
+              <p>{{ item.title }}</p>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+    </section>
+
     <!-- 攻略精选 -->
     <section class="section">
       <div class="section-header">
@@ -111,44 +157,40 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDestinations } from '@/api/destination'
 import { getGuides } from '@/api/guide'
+import { getPublicBanners } from '@/api/banner'
+import { getPublicRecommendations } from '@/api/recommendation'
 
 const router = useRouter()
 
-const banners = [
-  {
-    id: 1,
-    title: '探索世界的美好',
-    subtitle: '发现最精彩的旅行体验，开启属于你的冒险之旅',
-    btnText: '探索目的地',
-    action: '/destinations',
-    bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-  },
-  {
-    id: 2,
-    title: '旅行盲盒',
-    subtitle: '未知的目的地，惊喜的旅程，开启属于你的盲盒旅行',
-    btnText: '开启盲盒',
-    action: '/blind-box',
-    bgColor: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-  },
-  {
-    id: 3,
-    title: '分享你的故事',
-    subtitle: '记录旅途中的精彩瞬间，与千万旅行者分享',
-    btnText: '发布攻略',
-    action: '/guides/create',
-    bgColor: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
-  }
-]
-
+const banners = ref([])
+const recommendations = ref([])
 const hotDestinations = ref([])
 const featuredGuides = ref([])
 
-function handleBannerClick(banner) {
-  router.push(banner.action)
+function handleLinkClick(linkUrl) {
+  if (!linkUrl) return
+  if (/^https?:\/\//i.test(linkUrl)) {
+    window.open(linkUrl, '_blank', 'noopener')
+    return
+  }
+  router.push(linkUrl)
 }
 
 onMounted(async () => {
+  try {
+    const bannerRes = await getPublicBanners()
+    banners.value = bannerRes.data || []
+  } catch {
+    banners.value = []
+  }
+
+  try {
+    const recommendationRes = await getPublicRecommendations('home_featured')
+    recommendations.value = recommendationRes.data || []
+  } catch {
+    recommendations.value = []
+  }
+
   try {
     const destRes = await getDestinations({ current: 1, size: 4 })
     hotDestinations.value = destRes.data?.records || []
@@ -227,11 +269,34 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.banner-item.clickable {
+  cursor: pointer;
+}
+
+.banner-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.banner-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #409eff 0%, #764ba2 100%);
 }
 
 .banner-content {
+  position: relative;
+  z-index: 1;
   text-align: center;
   color: #fff;
+  padding: 0 24px;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   animation: fadeInUp 0.6s ease;
 }
 
@@ -435,6 +500,23 @@ onMounted(async () => {
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0;
+}
+
+/* 推荐位卡片 */
+.recommendation-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  margin-bottom: 20px;
+}
+
+.recommendation-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 攻略卡片 */
