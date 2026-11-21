@@ -1,10 +1,13 @@
 package com.ctrip.content.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import com.ctrip.content.cache.CacheService;
 import com.ctrip.content.converter.CommentConverter;
 import com.ctrip.content.dto.request.CreateCommentRequest;
+import com.ctrip.content.dto.response.AdminCommentResponse;
 import com.ctrip.content.dto.response.CommentTreeResponse;
 import com.ctrip.content.entity.Comment;
 import com.ctrip.content.entity.Guide;
@@ -18,6 +21,7 @@ import com.ctrip.user.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,11 +34,14 @@ public class CommentServiceImpl implements CommentService {
     private final CommentMapper commentMapper;
     private final GuideMapper guideMapper;
     private final UserMapper userMapper;
+    private final CacheService cacheService;
 
-    public CommentServiceImpl(CommentMapper commentMapper, GuideMapper guideMapper, UserMapper userMapper) {
+    public CommentServiceImpl(CommentMapper commentMapper, GuideMapper guideMapper,
+                              UserMapper userMapper, CacheService cacheService) {
         this.commentMapper = commentMapper;
         this.guideMapper = guideMapper;
         this.userMapper = userMapper;
+        this.cacheService = cacheService;
     }
 
     @Override
@@ -97,6 +104,86 @@ public class CommentServiceImpl implements CommentService {
 
         commentMapper.delete(new LambdaQueryWrapper<Comment>()
                 .in(Comment::getId, idsToDelete));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AdminCommentResponse> listAdminComments(int page, int size, Long guideId,
+                                                        Long userId, String keyword,
+                                                        LocalDate startDate, LocalDate endDate) {
+        int effectiveSize = Math.min(Math.max(size, 1), 100);
+        Page<Comment> pageObj = new Page<>(page, effectiveSize);
+
+        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
+        if (guideId != null) {
+            wrapper.eq(Comment::getGuideId, guideId);
+        }
+        if (userId != null) {
+            wrapper.eq(Comment::getUserId, userId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(Comment::getContent, keyword);
+        }
+        if (startDate != null) {
+            wrapper.ge(Comment::getCreatedAt, startDate.atStartOfDay());
+        }
+        if (endDate != null) {
+            wrapper.lt(Comment::getCreatedAt, endDate.plusDays(1).atStartOfDay());
+        }
+        wrapper.orderByDesc(Comment::getCreatedAt);
+
+        Page<Comment> result = commentMapper.selectPage(pageObj, wrapper);
+        List<Comment> comments = result.getRecords();
+
+        Set<Long> guideIds = comments.stream()
+                .map(Comment::getGuideId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> guideTitles = new HashMap<>();
+        if (!guideIds.isEmpty()) {
+            for (Guide guide : guideMapper.selectBatchIds(guideIds)) {
+                guideTitles.put(guide.getId(), guide.getTitle());
+            }
+        }
+
+        Set<Long> userIds = comments.stream()
+                .map(Comment::getUserId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, User> users = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            for (User user : userMapper.selectBatchIds(userIds)) {
+                users.put(user.getId(), user);
+            }
+        }
+
+        Page<AdminCommentResponse> response = new Page<>(
+                result.getCurrent(), result.getSize(), result.getTotal());
+        response.setRecords(comments.stream()
+                .map(comment -> {
+                    User user = users.get(comment.getUserId());
+                    return new AdminCommentResponse(
+                            comment.getId(),
+                            comment.getGuideId(),
+                            guideTitles.get(comment.getGuideId()),
+                            comment.getUserId(),
+                            user != null ? user.getUsername() : null,
+                            user != null ? user.getAvatarUrl() : null,
+                            comment.getParentId(),
+                            comment.getContent(),
+                            comment.getCreatedAt());
+                })
+                .toList());
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public void adminDeleteComment(Long commentId) {
+        Comment comment = requireComment(commentId);
+        List<Long> idsToDelete = new ArrayList<>(collectDescendants(commentId));
+        idsToDelete.add(commentId);
+        commentMapper.delete(new LambdaQueryWrapper<Comment>()
+                .in(Comment::getId, idsToDelete));
+
+        cacheService.evict("guide:" + comment.getGuideId());
+        cacheService.evictByPattern("guide:list:*");
     }
 
     // --- 私有辅助 ---
