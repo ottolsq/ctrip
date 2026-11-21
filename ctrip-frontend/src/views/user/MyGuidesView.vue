@@ -37,9 +37,19 @@
                     <el-icon :size="28"><Picture /></el-icon>
                   </div>
                 </div>
-                <div class="guide-info" @click="goToDetail(guide.id)">
-                  <h4 class="guide-title">{{ guide.title }}</h4>
-                  <p class="guide-summary">{{ guide.summary || stripHtml(guide.content) }}</p>
+                <div class="guide-info" @click="goToDetail(guide)">
+                  <div class="guide-title-row">
+                    <h4 class="guide-title">{{ guide.title }}</h4>
+                    <el-tag :type="statusTagType(guide.status)" size="small">
+                      {{ statusLabel(guide.status) }}
+                    </el-tag>
+                  </div>
+                  <p v-if="guide.rejectReason" class="reject-reason">
+                    驳回理由：{{ guide.rejectReason }}
+                  </p>
+                  <p v-else class="guide-summary">
+                    {{ guide.destinationName || '综合旅行经验' }}
+                  </p>
                   <div class="guide-meta">
                     <span class="meta-item">
                       <el-icon><Location /></el-icon>
@@ -60,10 +70,27 @@
                   </div>
                 </div>
                 <div class="guide-actions">
-                  <el-button size="small" plain @click="goToEdit(guide.id)">
+                  <el-button size="small" plain @click.stop="openPreview(guide.id)">
+                    查看
+                  </el-button>
+                  <el-button
+                    v-if="canEdit(guide)"
+                    size="small"
+                    plain
+                    @click.stop="goToEdit(guide.id)"
+                  >
                     编辑
                   </el-button>
-                  <el-button type="danger" size="small" plain @click="handleDelete(guide.id)">
+                  <el-button
+                    v-if="canSubmit(guide)"
+                    size="small"
+                    type="primary"
+                    plain
+                    @click.stop="handleSubmitReview(guide.id)"
+                  >
+                    提交审核
+                  </el-button>
+                  <el-button type="danger" size="small" plain @click.stop="handleDelete(guide.id)">
                     删除
                   </el-button>
                 </div>
@@ -87,6 +114,26 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog v-model="previewVisible" title="攻略预览" width="720px">
+      <template v-if="previewGuide">
+        <div class="preview-header">
+          <h3>{{ previewGuide.title }}</h3>
+          <el-tag :type="statusTagType(previewGuide.status)" size="small">
+            {{ statusLabel(previewGuide.status) }}
+          </el-tag>
+        </div>
+        <el-alert
+          v-if="previewGuide.rejectReason"
+          :title="'驳回理由：' + previewGuide.rejectReason"
+          type="error"
+          :closable="false"
+          show-icon
+          class="preview-alert"
+        />
+        <div class="preview-content" v-html="previewGuide.content"></div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -96,25 +143,52 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Picture, Location, Clock, View, Star } from '@element-plus/icons-vue'
 import UserSidebar from '@/components/common/UserSidebar.vue'
-import { getGuides, deleteGuide } from '@/api/guide'
-import { useUserStore } from '@/stores/user'
+import { getMyGuides, getManageGuide, submitGuide, deleteGuide } from '@/api/guide'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const loading = ref(false)
 const guides = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
+const previewVisible = ref(false)
+const previewGuide = ref(null)
+
+const statusLabels = {
+  DRAFT: '草稿',
+  PENDING: '审核中',
+  PUBLISHED: '已发布',
+  REJECTED: '已驳回'
+}
+
+function statusLabel(status) {
+  return statusLabels[status] || status || '-'
+}
+
+function statusTagType(status) {
+  return {
+    DRAFT: 'info',
+    PENDING: 'warning',
+    PUBLISHED: 'success',
+    REJECTED: 'danger'
+  }[status] || 'info'
+}
+
+function canEdit(guide) {
+  return guide.status !== 'PENDING'
+}
+
+function canSubmit(guide) {
+  return guide.status === 'DRAFT' || guide.status === 'REJECTED'
+}
 
 async function loadGuides() {
   loading.value = true
   try {
-    const res = await getGuides({
+    const res = await getMyGuides({
       page: page.value,
-      size: pageSize.value,
-      authorId: userStore.userInfo?.id
+      size: pageSize.value
     })
     guides.value = res.data?.records || res.data || []
     total.value = res.data?.total || 0
@@ -134,17 +208,45 @@ function formatDate(dateStr) {
   return String(dateStr).substring(0, 10)
 }
 
-function stripHtml(html) {
-  if (!html) return '暂无摘要'
-  return html.replace(/<[^>]+>/g, '').substring(0, 80) + '...'
-}
-
-function goToDetail(id) {
-  router.push(`/guides/${id}`)
+async function goToDetail(guide) {
+  if (guide.status === 'PUBLISHED') {
+    router.push(`/guides/${guide.id}`)
+  } else {
+    await openPreview(guide.id)
+  }
 }
 
 function goToEdit(id) {
   router.push(`/guides/${id}/edit`)
+}
+
+async function openPreview(id) {
+  try {
+    const res = await getManageGuide(id)
+    previewGuide.value = res.data
+    previewVisible.value = true
+  } catch {
+    // 错误已由请求拦截器提示
+  }
+}
+
+async function handleSubmitReview(id) {
+  try {
+    await ElMessageBox.confirm('确定提交审核吗？', '提交审核', {
+      confirmButtonText: '确定提交',
+      cancelButtonText: '取消',
+      type: 'info'
+    })
+  } catch {
+    return
+  }
+  try {
+    await submitGuide(id)
+    ElMessage.success('已提交审核')
+    loadGuides()
+  } catch {
+    // 错误已由请求拦截器提示
+  }
 }
 
 async function handleDelete(id) {
@@ -243,14 +345,49 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.guide-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .guide-title {
   font-size: 15px;
   font-weight: 600;
   color: #333;
-  margin: 0 0 8px;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.reject-reason {
+  font-size: 13px;
+  color: #f56c6c;
+  margin: 0 0 8px;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.preview-header h3 {
+  margin: 0;
+}
+
+.preview-alert {
+  margin-bottom: 12px;
+}
+
+.preview-content {
+  line-height: 1.8;
+  color: #303133;
+  max-height: 55vh;
+  overflow-y: auto;
 }
 
 .guide-summary {

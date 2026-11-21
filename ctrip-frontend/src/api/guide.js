@@ -19,6 +19,27 @@ export function getGuide(id) {
 }
 
 /**
+ * 我的攻略（含草稿/审核中/驳回）
+ */
+export function getMyGuides(params) {
+  return request.get('/v1/guides/mine', { params })
+}
+
+/**
+ * 作者管理详情（非公开状态也可读取）
+ */
+export function getManageGuide(id) {
+  return request.get(`/v1/guides/${id}/manage`)
+}
+
+/**
+ * 提交审核
+ */
+export function submitGuide(id) {
+  return request.post(`/v1/guides/${id}/submit`)
+}
+
+/**
  * 发布攻略
  */
 export function createGuide(data) {

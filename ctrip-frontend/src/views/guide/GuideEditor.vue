@@ -135,11 +135,27 @@
             <el-button @click="handleCancel" size="large" class="cancel-btn">
               取消
             </el-button>
-            <el-button type="primary" @click="handleSubmit" :loading="submitLoading" size="large" class="submit-btn">
+            <el-button
+              v-if="currentStatus !== 'PUBLISHED'"
+              :loading="draftLoading"
+              size="large"
+              @click="handleSaveDraft"
+            >
+              保存草稿
+            </el-button>
+            <el-button type="primary" @click="handleSubmitReview" :loading="submitLoading" size="large" class="submit-btn">
               <el-icon v-if="!submitLoading"><Check /></el-icon>
-              {{ isEdit ? '保存修改' : '立即发布' }}
+              {{ currentStatus === 'PUBLISHED' ? '提交修改审核' : '提交审核' }}
             </el-button>
           </div>
+          <el-alert
+            v-if="currentStatus === 'PUBLISHED'"
+            title="修改已发布攻略后需重新审核，审核通过前不再公开"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="publish-hint"
+          />
         </el-form>
       </el-card>
     </div>
@@ -149,7 +165,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getGuide, createGuide, updateGuide } from '@/api/guide'
+import { getManageGuide, createGuide, updateGuide, submitGuide } from '@/api/guide'
 import { getDestinations } from '@/api/destination'
 import { uploadImage } from '@/api/upload'
 import { ElMessage } from 'element-plus'
@@ -165,6 +181,8 @@ const editorRef = ref(null)
 const toolbarRef = ref(null)
 const loading = ref(false)
 const submitLoading = ref(false)
+const draftLoading = ref(false)
+const currentStatus = ref('')
 const destLoading = ref(false)
 const destOptions = ref([])
 let editor = null
@@ -276,45 +294,73 @@ async function loadGuide() {
   if (!isEdit.value) return
   loading.value = true
   try {
-    const res = await getGuide(route.params.id)
+    const res = await getManageGuide(route.params.id)
     const data = res.data
+    currentStatus.value = data.status || ''
+    if (data.status === 'PENDING') {
+      ElMessage.warning('审核中的攻略不可编辑')
+      router.push('/user/guides')
+      return
+    }
     form.title = data.title || ''
     form.destinationId = data.destinationId || null
     form.coverUrl = data.coverUrl || ''
     form.content = data.content || ''
   } catch {
     ElMessage.error('加载攻略失败')
-    router.push('/guides')
+    router.push('/user/guides')
   } finally {
     loading.value = false
   }
 }
 
-// 提交
-async function handleSubmit() {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+function buildPayload() {
+  return {
+    title: form.title,
+    destinationId: form.destinationId || undefined,
+    coverUrl: form.coverUrl || undefined,
+    content: form.content
+  }
+}
 
+async function saveGuide() {
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return null
+  if (isEdit.value) {
+    const res = await updateGuide(route.params.id, buildPayload())
+    return res.data
+  }
+  const res = await createGuide(buildPayload())
+  return res.data
+}
+
+// 保存草稿
+async function handleSaveDraft() {
+  draftLoading.value = true
+  try {
+    await saveGuide()
+    ElMessage.success('草稿已保存')
+    router.push('/user/guides')
+  } catch {
+    // 错误已由请求拦截器提示
+  } finally {
+    draftLoading.value = false
+  }
+}
+
+// 提交审核
+async function handleSubmitReview() {
   submitLoading.value = true
   try {
-    const postData = {
-      title: form.title,
-      destinationId: form.destinationId || undefined,
-      coverUrl: form.coverUrl || undefined,
-      content: form.content,
-      status: 'PUBLISHED'
+    const data = await saveGuide()
+    if (!data) return
+    if (data.status !== 'PENDING') {
+      await submitGuide(data.id)
     }
-
-    if (isEdit.value) {
-      await updateGuide(route.params.id, postData)
-      ElMessage.success('攻略已更新')
-    } else {
-      await createGuide(postData)
-      ElMessage.success('攻略发布成功')
-    }
-    router.push(isEdit.value ? `/guides/${route.params.id}` : '/guides')
+    ElMessage.success('已提交审核')
+    router.push('/user/guides')
   } catch {
-    // 错误已处理
+    // 错误已由请求拦截器提示
   } finally {
     submitLoading.value = false
   }
