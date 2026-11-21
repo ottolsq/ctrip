@@ -139,7 +139,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**148/148 通过**（P1.4 新增轮播图/推荐位/数据概览测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**155/155 通过**（P2 新增全局 400、审核条件更新、模板分页/删除竞态测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -206,6 +206,31 @@ python -I ctrip-backend/scripts/e2e_admin_p14.py
 ```
 
 覆盖：Banner 创建/启用窗口/停用/删除与公开过滤；推荐位目的地/攻略装配，未发布攻略跳过；Dashboard 字段与 7 天序列；运营访问管理端 403；公开接口免登录。
+
+### 7.7 全量 E2E、压测与部署试运行（P2）
+
+一键运行全部 E2E（429 自动等待重试）：
+
+```bash
+python -I ctrip-backend/scripts/run_all_e2e.py
+```
+
+并发压测（默认库存 10、并发 20）：
+
+```bash
+python -I ctrip-backend/scripts/stress_blindbox.py
+```
+
+部署试运行：Windows jar 8081 + WSL 用户态 nginx 8088（无需 sudo）：
+
+```bash
+bash deploy/build.sh
+bash deploy/start.sh
+BASE_URL=http://127.0.0.1:8088/api/v1 python -I ctrip-backend/scripts/e2e_admin_p14.py
+bash deploy/stop.sh
+```
+
+完整结果见 `docs/other/p2_acceptance.md`，操作细节见 `deploy/DEPLOYMENT.md`。
 
 ## 8. 安全说明
 
