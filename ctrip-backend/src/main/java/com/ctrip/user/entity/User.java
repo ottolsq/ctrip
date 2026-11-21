@@ -1,6 +1,7 @@
 package com.ctrip.user.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -56,6 +57,10 @@ public class User {
     private String realName;  // 实名认证姓名
 
     private UserStatus status;
+
+    /** 封禁前状态；解封时恢复，非封禁状态为 null。更新时必须允许写入 null。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private UserStatus statusBeforeSuspend;
 
     private UserRole role;
 
