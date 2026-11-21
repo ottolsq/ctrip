@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -49,6 +50,9 @@ class JwtAuthenticationFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
     private ObjectMapper objectMapper;
     private JwtAuthenticationFilter filter;
     private MockHttpServletRequest request;
@@ -57,7 +61,7 @@ class JwtAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        filter = new JwtAuthenticationFilter(jwtService, objectMapper);
+        filter = new JwtAuthenticationFilter(jwtService, objectMapper, stringRedisTemplate);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }
@@ -125,6 +129,37 @@ class JwtAuthenticationFilterTest {
                 .hasSize(1)
                 .extracting("authority")
                 .containsExactly("ROLE_USER");
+    }
+
+    @Test
+    @DisplayName("封禁用户：有效 JWT 也返回 401，过滤链不继续")
+    void bannedUser_validToken_shouldReturn401AndSkipChain() throws ServletException, IOException {
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "banned.jwt.token");
+        when(jwtService.extractUserId("banned.jwt.token")).thenReturn(1L);
+        when(jwtService.extractUserRole("banned.jwt.token")).thenReturn("USER");
+        when(stringRedisTemplate.hasKey(UserBanKeys.key(1L))).thenReturn(true);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString()).contains("账号已被封禁");
+    }
+
+    @Test
+    @DisplayName("Redis 不可用：记录告警并继续过滤链")
+    void banCheckRedisDown_shouldContinueFilterChain() throws ServletException, IOException {
+        request.addHeader(AUTHORIZATION_HEADER, BEARER_PREFIX + "valid.jwt.token");
+        when(jwtService.extractUserId("valid.jwt.token")).thenReturn(42L);
+        when(jwtService.extractUserRole("valid.jwt.token")).thenReturn("USER");
+        when(stringRedisTemplate.hasKey(UserBanKeys.key(42L)))
+                .thenThrow(new RuntimeException("redis down"));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal())
+                .isEqualTo(42L);
     }
 
     @Test

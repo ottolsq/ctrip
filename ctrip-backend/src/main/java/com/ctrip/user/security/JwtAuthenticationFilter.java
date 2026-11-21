@@ -11,6 +11,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -47,15 +50,21 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
-    public JwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
+    public JwtAuthenticationFilter(JwtService jwtService,
+                                   ObjectMapper objectMapper,
+                                   StringRedisTemplate stringRedisTemplate) {
         this.jwtService = jwtService;
         this.objectMapper = objectMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
     
     @Override
@@ -76,6 +85,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Long userId = jwtService.extractUserId(token);
             String role = jwtService.extractUserRole(token);
+
+            // 封禁检查：命中 Redis denylist 立即 401（不等 access token 过期）
+            try {
+                if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(UserBanKeys.key(userId)))) {
+                    writeErrorResponse(response, HttpStatus.UNAUTHORIZED, "账号已被封禁，请联系客服");
+                    return;
+                }
+            } catch (Exception e) {
+                // Redis 不可用时按未封禁继续（可用性优先；refresh token 已被吊销）
+                log.warn("检查用户封禁状态失败，按未封禁继续: userId={}, error={}",
+                        userId, e.getMessage());
+            }
 
             // 仅在 SecurityContext 未设置认证时写入，防止覆盖已有认证信息
             if (SecurityContextHolder.getContext().getAuthentication() == null) {

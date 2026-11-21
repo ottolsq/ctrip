@@ -8,6 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -55,8 +56,10 @@ public class SecurityConfig {
      * 仅通过 {@link #securityFilterChain} 中的 {@code addFilterBefore} 纳入 Security 过滤链。
      */
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
-        return new JwtAuthenticationFilter(jwtService, objectMapper);
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService,
+                                                           ObjectMapper objectMapper,
+                                                           StringRedisTemplate stringRedisTemplate) {
+        return new JwtAuthenticationFilter(jwtService, objectMapper, stringRedisTemplate);
     }
 
     /**
