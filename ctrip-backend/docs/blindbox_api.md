@@ -1383,7 +1383,8 @@ curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
 - 仅 `PAID` / `OPENED` 可退款，否则 **400**；
 - 条件更新 `WHERE id = ? AND status IN (PAID, OPENED)`，并发/重复退款返回 **400**；
 - 更新为 `REFUNDED` 并写入 `refundReason/refundedAt`；
-- 事务提交后发送 `ORDER_REFUNDED`，消费者按 eventId 幂等恢复限定盲盒库存一次。
+- 同一事务内恢复限定盲盒库存一次（`stock >= 0` 才 +1，日常盲盒不受影响）；
+- 事务提交后发送 `ORDER_REFUNDED` 供下游通知/统计，事件发布失败不影响退款结果。
 
 ---
 

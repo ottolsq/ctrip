@@ -282,7 +282,8 @@
 - 仅 `PAID` / `OPENED` 可退款，否则 **400**；
 - 使用 `WHERE id = ? AND status IN (PAID, OPENED)` 条件更新，置为 `REFUNDED` 并写入 `refundReason/refundedAt`；
 - 并发退款导致影响行数为 0 → **400**，不会重复退款；
-- 事务提交后发送 `ORDER_REFUNDED`；`OrderStatusConsumer` 按 eventId 幂等消费并恢复限定盲盒库存一次（`stock >= 0` 才 +1，日常盲盒不受影响）。
+- 同一退款事务内恢复限定盲盒库存（`stock >= 0` 才 +1，日常盲盒不受影响），库存不依赖 MQ；
+- 事务提交后发送 `ORDER_REFUNDED` 供下游通知/统计；发布失败仅记录日志，不影响已提交的退款与库存。
 
 ### 异常重试开盒
 

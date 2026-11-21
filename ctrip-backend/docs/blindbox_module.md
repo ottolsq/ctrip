@@ -562,7 +562,7 @@ WHERE id = ? AND stock >= 1;
 以下场景需要恢复库存（限定盲盒 stock + 1）：
 - 订单超时取消（15 分钟未支付）：`BlindBoxOrderServiceImpl` 同步恢复
 - 用户主动取消（仅 PENDING 状态）：`BlindBoxOrderServiceImpl` 同步恢复
-- 后台退款：事务提交后发送 `ORDER_REFUNDED`，由 `OrderStatusConsumer` 按 eventId 幂等恢复一次
+- 后台退款：`AdminBlindBoxOrderServiceImpl` 在同一退款事务内恢复一次；提交后发送 `ORDER_REFUNDED` 供下游通知/统计
 
 `incrementStock` 的 SQL 带 `AND stock >= 0`，因此日常盲盒（`stock = -1`）不会被误加为 0。
 
@@ -599,7 +599,7 @@ WHERE id = ? AND stock >= 1;
 
 | 队列 | 消费者 | 动作 |
 |------|--------|------|
-| `order.status.queue` | `OrderStatusConsumer` | 支付/取消日志；`ORDER_REFUNDED` 按 eventId 幂等恢复限定盲盒库存 |
+| `order.status.queue` | `OrderStatusConsumer` | 支付/取消/退款事件记录（退款库存已在退款事务内恢复） |
 | `order.notification.queue` | `OrderNotificationConsumer` | 用户通知 |
 | `analytics.queue` | `AnalyticsConsumer` | 业务统计 |
 
@@ -643,7 +643,7 @@ WHERE id = ? AND stock >= 1;
 - **支付回调**：若订单已支付，直接返回成功
 - **取消订单**：若已取消，静默返回
 - **退款**：仅 PAID/OPENED 可退，`WHERE status IN (PAID, OPENED)` 条件更新，重复/并发退款 400
-- **退款库存恢复**：`OrderStatusConsumer` 以 eventId SETNX 幂等，只恢复一次
+- **退款库存恢复**：与退款条件更新同一事务执行一次；`ORDER_REFUNDED` 发布失败只记日志，不回滚已提交退款
 - **异常重试**：仅 PROCESSING 可重试；消费者以 eventId 幂等，重复事件跳过
 
 ### 11.4 权限控制
