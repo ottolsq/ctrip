@@ -1,11 +1,11 @@
 package com.ctrip.blindbox.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.ctrip.blindbox.dto.OrderResponse;
 import com.ctrip.blindbox.dto.TemplateResponse;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
-import com.ctrip.blindbox.service.impl.BlindBoxTemplateServiceImpl;
-import com.ctrip.blindbox.service.BlindBoxOrderService;
+import com.ctrip.blindbox.entity.enums.BlindBoxType;
+import com.ctrip.blindbox.entity.enums.TemplateStatus;
+import com.ctrip.blindbox.service.BlindBoxTemplateService;
 import com.ctrip.common.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,13 +22,10 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminBlindBoxController {
 
-    private final BlindBoxTemplateServiceImpl templateService;
-    private final BlindBoxOrderService orderService;
+    private final BlindBoxTemplateService templateService;
 
-    public AdminBlindBoxController(BlindBoxTemplateServiceImpl templateService,
-                                   BlindBoxOrderService orderService) {
+    public AdminBlindBoxController(BlindBoxTemplateService templateService) {
         this.templateService = templateService;
-        this.orderService = orderService;
     }
 
     // ========== 模板管理 ==========
@@ -39,8 +36,11 @@ public class AdminBlindBoxController {
     @GetMapping("/templates")
     public ResponseEntity<ApiResponse<Page<TemplateResponse>>> listTemplates(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit) {
-        Page<TemplateResponse> result = templateService.listAllTemplates(page, limit);
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) BlindBoxType type,
+            @RequestParam(required = false) TemplateStatus status,
+            @RequestParam(required = false) String keyword) {
+        Page<TemplateResponse> result = templateService.listAllTemplates(page, limit, type, status, keyword);
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -72,19 +72,5 @@ public class AdminBlindBoxController {
     public ResponseEntity<ApiResponse<Void>> deleteTemplate(@PathVariable Long id) {
         templateService.deleteTemplate(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
-    }
-
-    // ========== 订单管理 ==========
-
-    /**
-     * 全部订单列表（分页）。
-     */
-    @GetMapping("/orders")
-    public ResponseEntity<ApiResponse<Page<OrderResponse>>> listAllOrders(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(required = false) String status) {
-        // MVP 阶段返回空分页结果，后续可扩展 listAllOrders 方法
-        return ResponseEntity.ok(ApiResponse.ok(new Page<>(page, limit)));
     }
 }

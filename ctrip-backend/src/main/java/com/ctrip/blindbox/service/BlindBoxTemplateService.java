@@ -2,6 +2,9 @@ package com.ctrip.blindbox.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.dto.TemplateResponse;
+import com.ctrip.blindbox.entity.BlindBoxTemplate;
+import com.ctrip.blindbox.entity.enums.BlindBoxType;
+import com.ctrip.blindbox.entity.enums.TemplateStatus;
 
 /**
  * 盲盒模板服务接口。
@@ -27,4 +30,13 @@ public interface BlindBoxTemplateService {
      * @return 模板详情
      */
     TemplateResponse getTemplateDetail(Long id);
+
+    Page<TemplateResponse> listAllTemplates(int page, int limit, BlindBoxType type,
+                                            TemplateStatus status, String keyword);
+
+    TemplateResponse createTemplate(BlindBoxTemplate template);
+
+    TemplateResponse updateTemplate(Long id, BlindBoxTemplate updates);
+
+    void deleteTemplate(Long id);
 }

@@ -19,6 +19,7 @@ import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxPreferenceMapper;
 import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
+import com.ctrip.blindbox.rule.BlindBoxRuleConfigParser;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
 import com.ctrip.blindbox.service.BlindBoxSchemeService;
@@ -109,8 +110,9 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
             throw new BusinessException("盲盒已下架，无法购买");
         }
 
-        // 2. 限定盲盒：检查库存 + 分布式锁扣减
+        // 2. 限定盲盒：检查活动窗口 + 库存 + 分布式锁扣减
         if (template.getType() == BlindBoxType.LIMITED) {
+            BlindBoxRuleConfigParser.ensureActive(template.getRuleConfig(), LocalDateTime.now());
             if (template.getStock() == null || template.getStock() <= 0) {
                 throw new BusinessException("库存不足");
             }
