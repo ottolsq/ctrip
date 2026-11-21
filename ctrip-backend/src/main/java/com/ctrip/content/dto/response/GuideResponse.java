@@ -21,6 +21,8 @@ public record GuideResponse(
         Integer viewCount,
         Integer likeCount,
         Integer commentCount,
+        String rejectReason,
+        LocalDateTime reviewedAt,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

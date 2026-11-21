@@ -3,6 +3,7 @@ package com.ctrip.content.converter;
 import com.ctrip.content.dto.request.CreateGuideRequest;
 import com.ctrip.content.dto.response.GuideListResponse;
 import com.ctrip.content.dto.response.GuideResponse;
+import com.ctrip.content.dto.response.MyGuideListResponse;
 import com.ctrip.content.entity.Guide;
 import com.ctrip.content.entity.enums.GuideStatus;
 
@@ -29,7 +30,7 @@ public class GuideConverter {
                 .destinationId(request.destinationId())
                 .coverUrl(request.coverUrl())
                 .imageUrls(request.imageUrls())
-                .status(request.status() != null ? request.status() : GuideStatus.DRAFT)
+                .status(GuideStatus.DRAFT)
                 .viewCount(0)
                 .likeCount(0)
                 .build();
@@ -58,6 +59,29 @@ public class GuideConverter {
                 entity.getCoverUrl(),
                 entity.getImageUrls(),
                 entity.getStatus() != null ? entity.getStatus().name() : null,
+                entity.getViewCount(),
+                entity.getLikeCount(),
+                commentCount,
+                entity.getRejectReason(),
+                entity.getReviewedAt(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+
+    /**
+     * 作者“我的攻略”列表项。
+     */
+    public static MyGuideListResponse toMyListResponse(Guide entity, String destinationName,
+                                                       int commentCount) {
+        return new MyGuideListResponse(
+                entity.getId(),
+                entity.getAuthorId(),
+                entity.getTitle(),
+                entity.getCoverUrl(),
+                destinationName,
+                entity.getStatus() != null ? entity.getStatus().name() : null,
+                entity.getRejectReason(),
                 entity.getViewCount(),
                 entity.getLikeCount(),
                 commentCount,

@@ -10,7 +10,8 @@ public enum GuideStatus {
 
     DRAFT(0),     // 草稿，仅作者可见
     PUBLISHED(1), // 已发布，公开可见
-    REJECTED(2);  // 审核驳回
+    REJECTED(2),  // 审核驳回
+    PENDING(3);   // 已提交，等待内容运营审核
 
     @EnumValue
     private final int value;

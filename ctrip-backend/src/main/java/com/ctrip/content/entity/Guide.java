@@ -1,6 +1,7 @@
 package com.ctrip.content.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -38,6 +39,18 @@ public class Guide {
 
     // MyBatis Plus 通过 @EnumValue 自动将枚举与数据库 TINYINT 互转
     private GuideStatus status;    // 发布状态
+
+    /** 审核驳回理由；提交/通过时清空。更新时必须允许写回 null。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String rejectReason;
+
+    /** 审核人用户 ID；提交/编辑时清空。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long reviewedBy;
+
+    /** 审核时间；提交/编辑时清空。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime reviewedAt;
 
     private Integer viewCount;     // 浏览次数
     private Integer likeCount;     // 点赞次数

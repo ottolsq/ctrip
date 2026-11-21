@@ -6,6 +6,8 @@ import com.ctrip.content.dto.request.CreateGuideRequest;
 import com.ctrip.content.dto.request.UpdateGuideRequest;
 import com.ctrip.content.dto.response.GuideListResponse;
 import com.ctrip.content.dto.response.GuideResponse;
+import com.ctrip.content.dto.response.MyGuideListResponse;
+import com.ctrip.content.entity.enums.GuideStatus;
 import com.ctrip.content.service.GuideService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -48,6 +50,30 @@ public class GuideController {
     public ResponseEntity<ApiResponse<GuideResponse>> getDetail(@PathVariable Long id) {
         GuideResponse result = guideService.getDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
+    @GetMapping("/mine")
+    public ResponseEntity<ApiResponse<Page<MyGuideListResponse>>> listMine(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) GuideStatus status) {
+        Page<MyGuideListResponse> result = guideService.listMyGuides(userId, page, size, status);
+        return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
+    @GetMapping("/{id}/manage")
+    public ResponseEntity<ApiResponse<GuideResponse>> getManageDetail(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(guideService.getManageDetail(id, userId)));
+    }
+
+    @PostMapping("/{id}/submit")
+    public ResponseEntity<ApiResponse<GuideResponse>> submit(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(guideService.submitGuide(id, userId)));
     }
 
     @PostMapping

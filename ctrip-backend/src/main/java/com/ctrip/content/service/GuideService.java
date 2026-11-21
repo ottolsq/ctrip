@@ -5,6 +5,8 @@ import com.ctrip.content.dto.request.CreateGuideRequest;
 import com.ctrip.content.dto.request.UpdateGuideRequest;
 import com.ctrip.content.dto.response.GuideListResponse;
 import com.ctrip.content.dto.response.GuideResponse;
+import com.ctrip.content.dto.response.MyGuideListResponse;
+import com.ctrip.content.entity.enums.GuideStatus;
 
 /**
  * 攻略服务接口，负责攻略的发布、浏览、编辑和互动。
@@ -14,6 +16,12 @@ public interface GuideService {
     Page<GuideListResponse> listGuides(int page, int limit, Long destinationId, Long authorId, String keyword, String sortBy);
 
     GuideResponse getDetail(Long id);
+
+    Page<MyGuideListResponse> listMyGuides(Long userId, int page, int size, GuideStatus status);
+
+    GuideResponse getManageDetail(Long guideId, Long userId);
+
+    GuideResponse submitGuide(Long guideId, Long userId);
 
     GuideResponse createGuide(Long authorId, CreateGuideRequest request);
 

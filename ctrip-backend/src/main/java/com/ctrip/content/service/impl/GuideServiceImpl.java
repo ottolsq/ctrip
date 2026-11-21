@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.AuthenticationException;
+import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
 import com.ctrip.config.CacheConfig;
 import com.ctrip.content.cache.CacheService;
@@ -12,6 +13,7 @@ import com.ctrip.content.dto.request.CreateGuideRequest;
 import com.ctrip.content.dto.request.UpdateGuideRequest;
 import com.ctrip.content.dto.response.GuideListResponse;
 import com.ctrip.content.dto.response.GuideResponse;
+import com.ctrip.content.dto.response.MyGuideListResponse;
 import com.ctrip.content.entity.Comment;
 import com.ctrip.content.entity.Destination;
 import com.ctrip.content.entity.Guide;
@@ -20,6 +22,7 @@ import com.ctrip.content.mapper.CommentMapper;
 import com.ctrip.content.mapper.DestinationMapper;
 import com.ctrip.content.mapper.GuideMapper;
 import com.ctrip.content.service.GuideService;
+import com.ctrip.messaging.publisher.EventPublisher;
 import com.ctrip.user.entity.User;
 import com.ctrip.user.mapper.UserMapper;
 import com.fasterxml.jackson.databind.JavaType;
@@ -29,6 +32,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -68,6 +73,7 @@ public class GuideServiceImpl implements GuideService {
     private final CacheService cacheService;
     private final RBloomFilter<String> guideBloomFilter;
     private final ObjectMapper objectMapper;
+    private final EventPublisher eventPublisher;
 
     public GuideServiceImpl(GuideMapper guideMapper,
                             DestinationMapper destinationMapper,
@@ -75,7 +81,8 @@ public class GuideServiceImpl implements GuideService {
                             CommentMapper commentMapper,
                             CacheService cacheService,
                             RBloomFilter<String> guideBloomFilter,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            EventPublisher eventPublisher) {
         this.guideMapper = guideMapper;
         this.destinationMapper = destinationMapper;
         this.userMapper = userMapper;
@@ -83,6 +90,7 @@ public class GuideServiceImpl implements GuideService {
         this.cacheService = cacheService;
         this.guideBloomFilter = guideBloomFilter;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -219,26 +227,11 @@ public class GuideServiceImpl implements GuideService {
         Guide guide = GuideConverter.toEntity(authorId, request);
         guideMapper.insert(guide);
 
-        // 如果发布状态为 PUBLISHED，加入布隆过滤器
-        if (guide.getStatus() == GuideStatus.PUBLISHED) {
-            guideBloomFilter.add(CacheConfig.blogKey(guide.getId()));
-        }
-
-        // 删除列表缓存（新攻略可能出现在列表中）
+        // 新建攻略固定为草稿，不会出现在公共列表
         cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
 
-        User author = userMapper.selectById(authorId);
-        String authorName = author != null ? author.getUsername() : null;
-        String authorAvatar = author != null ? author.getAvatarUrl() : null;
-
         log.info("创建攻略: id={}, title={}, authorId={}", guide.getId(), guide.getTitle(), authorId);
-        return GuideConverter.toResponse(
-                requireGuide(guide.getId()),
-                resolveDestinationName(guide.getDestinationId()),
-                authorName,
-                authorAvatar,
-                0
-        );
+        return buildGuideResponse(requireGuide(guide.getId()));
     }
 
     @Override
@@ -247,43 +240,112 @@ public class GuideServiceImpl implements GuideService {
         Guide guide = requireGuide(id);
         checkGuideOwner(guide, userId);
 
-        guideMapper.update(null, new LambdaUpdateWrapper<Guide>()
-                .eq(Guide::getId, id)
-                .set(request.title() != null, Guide::getTitle, request.title())
-                .set(request.content() != null, Guide::getContent, request.content())
-                .set(request.destinationId() != null, Guide::getDestinationId, request.destinationId())
-                .set(request.coverUrl() != null, Guide::getCoverUrl, request.coverUrl())
-                .set(request.imageUrls() != null, Guide::getImageUrls, request.imageUrls())
-                .set(request.status() != null, Guide::getStatus, request.status()));
-
-        // 状态变更时同步更新布隆过滤器
-        if (request.status() != null) {
-            if (request.status() == GuideStatus.PUBLISHED) {
-                guideBloomFilter.add(CacheConfig.blogKey(id));
-            }
-            // 状态从 PUBLISHED 改为其他时：
-            // 布隆过滤器不支持删除操作，旧状态 ID 在下次应用重启重建时自然消失
+        if (guide.getStatus() == GuideStatus.PENDING) {
+            throw new BusinessException("审核中的攻略不可编辑");
+        }
+        if (!hasContentChanges(request)) {
+            return buildGuideResponse(guide);
         }
 
-        // 删除详情缓存（数据已变更）
+        GuideStatus newStatus = guide.getStatus() == GuideStatus.PUBLISHED
+                ? GuideStatus.PENDING : GuideStatus.DRAFT;
+
+        Guide update = Guide.builder()
+                .id(id)
+                .title(request.title())
+                .content(request.content())
+                .destinationId(request.destinationId())
+                .coverUrl(request.coverUrl())
+                .imageUrls(request.imageUrls())
+                .status(newStatus)
+                .rejectReason(null)
+                .reviewedBy(null)
+                .reviewedAt(null)
+                .build();
+        guideMapper.updateById(update);
+
         cacheService.evict(CACHE_KEY_GUIDE + id);
-        // 删除列表缓存（排序/筛选可能受影响）
         cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
 
-        Guide updated = requireGuide(id);
-        User author = userMapper.selectById(updated.getAuthorId());
-        String authorName = author != null ? author.getUsername() : null;
-        String authorAvatar = author != null ? author.getAvatarUrl() : null;
-        int commentCount = countComments(id);
+        if (newStatus == GuideStatus.PENDING) {
+            publishAfterCommit("GUIDE_SUBMITTED", id, guide.getAuthorId());
+        }
 
-        log.info("更新攻略: id={}, title={}", id, updated.getTitle());
-        return GuideConverter.toResponse(
-                updated,
-                resolveDestinationName(updated.getDestinationId()),
-                authorName,
-                authorAvatar,
-                commentCount
-        );
+        log.info("更新攻略: id={}, status={}", id, newStatus);
+        return buildGuideResponse(requireGuide(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MyGuideListResponse> listMyGuides(Long userId, int page, int size,
+                                                  GuideStatus status) {
+        int effectiveSize = Math.min(Math.max(size, 1), 100);
+        Page<Guide> pageObj = new Page<>(page, effectiveSize);
+
+        LambdaQueryWrapper<Guide> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Guide::getAuthorId, userId);
+        if (status != null) {
+            wrapper.eq(Guide::getStatus, status);
+        }
+        wrapper.orderByDesc(Guide::getUpdatedAt);
+
+        Page<Guide> result = guideMapper.selectPage(pageObj, wrapper);
+        List<Guide> guides = result.getRecords();
+
+        Set<Long> destinationIds = guides.stream()
+                .map(Guide::getDestinationId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> guideIds = guides.stream().map(Guide::getId).collect(Collectors.toSet());
+        Map<Long, String> destinationNames = batchQueryDestinationNames(destinationIds);
+        Map<Long, Integer> commentCounts = batchQueryCommentCounts(guideIds);
+
+        Page<MyGuideListResponse> responsePage = new Page<>(
+                result.getCurrent(), result.getSize(), result.getTotal());
+        responsePage.setRecords(guides.stream()
+                .map(guide -> GuideConverter.toMyListResponse(
+                        guide,
+                        guide.getDestinationId() == null
+                                ? null : destinationNames.get(guide.getDestinationId()),
+                        commentCounts.getOrDefault(guide.getId(), 0)))
+                .toList());
+        return responsePage;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GuideResponse getManageDetail(Long guideId, Long userId) {
+        Guide guide = requireGuide(guideId);
+        checkGuideOwner(guide, userId);
+        return buildGuideResponse(guide);
+    }
+
+    @Override
+    @Transactional
+    public GuideResponse submitGuide(Long guideId, Long userId) {
+        Guide guide = requireGuide(guideId);
+        checkGuideOwner(guide, userId);
+
+        if (guide.getStatus() != GuideStatus.DRAFT
+                && guide.getStatus() != GuideStatus.REJECTED) {
+            throw new BusinessException("仅草稿或已驳回的攻略可提交审核");
+        }
+
+        Guide update = Guide.builder()
+                .id(guideId)
+                .status(GuideStatus.PENDING)
+                .rejectReason(null)
+                .reviewedBy(null)
+                .reviewedAt(null)
+                .build();
+        guideMapper.updateById(update);
+
+        cacheService.evict(CACHE_KEY_GUIDE + guideId);
+        cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
+
+        publishAfterCommit("GUIDE_SUBMITTED", guideId, guide.getAuthorId());
+
+        log.info("攻略提交审核: id={}, authorId={}", guideId, userId);
+        return buildGuideResponse(requireGuide(guideId));
     }
 
     @Override
@@ -329,7 +391,43 @@ public class GuideServiceImpl implements GuideService {
         cacheService.evict(CACHE_KEY_GUIDE + id);
     }
 
-    // --- 私有辅助（与改造前完全一致，保持不变） ---
+    // --- 私有辅助 ---
+
+    private GuideResponse buildGuideResponse(Guide guide) {
+        User author = userMapper.selectById(guide.getAuthorId());
+        String authorName = author != null ? author.getUsername() : null;
+        String authorAvatar = author != null ? author.getAvatarUrl() : null;
+        return GuideConverter.toResponse(
+                guide,
+                resolveDestinationName(guide.getDestinationId()),
+                authorName,
+                authorAvatar,
+                countComments(guide.getId())
+        );
+    }
+
+    private boolean hasContentChanges(UpdateGuideRequest request) {
+        return request.title() != null
+                || request.content() != null
+                || request.destinationId() != null
+                || request.coverUrl() != null
+                || request.imageUrls() != null;
+    }
+
+    private void publishAfterCommit(String eventType, Long guideId, Long authorId) {
+        Runnable publish = () -> eventPublisher.publishContentAuditEvent(
+                eventType, guideId, authorId, null, null);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publish.run();
+                }
+            });
+        } else {
+            publish.run();
+        }
+    }
 
     private Guide requireGuide(Long id) {
         Guide guide = guideMapper.selectById(id);

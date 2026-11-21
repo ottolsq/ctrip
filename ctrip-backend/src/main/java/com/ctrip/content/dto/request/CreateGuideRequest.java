@@ -1,6 +1,5 @@
 package com.ctrip.content.dto.request;
 
-import com.ctrip.content.entity.enums.GuideStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -26,9 +25,6 @@ public record CreateGuideRequest(
         String coverUrl,
 
         /** 多图 JSON 数组 */
-        String imageUrls,
-
-        /** 发布状态：草稿或已发布 */
-        GuideStatus status
+        String imageUrls
 
 ) {}

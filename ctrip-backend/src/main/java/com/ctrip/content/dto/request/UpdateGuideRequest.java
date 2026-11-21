@@ -1,6 +1,5 @@
 package com.ctrip.content.dto.request;
 
-import com.ctrip.content.entity.enums.GuideStatus;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -19,8 +18,6 @@ public record UpdateGuideRequest(
         @Size(max = 500)
         String coverUrl,
 
-        String imageUrls,
-
-        GuideStatus status
+        String imageUrls
 
 ) {}
