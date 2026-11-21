@@ -25,7 +25,7 @@
             </div>
             <div class="template-detail">
               <h3 class="template-name">{{ template.name }}</h3>
-              <p class="template-desc">{{ template.ruleConfig?.description || template.description || '暂无描述' }}</p>
+              <p class="template-desc">{{ ruleDescription(template.ruleConfig) || template.description || '暂无描述' }}</p>
               <div v-if="template.type === 'DAILY'" class="template-tag daily">日常盲盒</div>
               <div v-else-if="template.type === 'LIMITED'" class="template-tag limited">限定盲盒</div>
             </div>
@@ -116,6 +116,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getBlindBoxTemplate, createBlindBoxOrder } from '@/api/blindbox'
 import { Box } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { ruleDescription } from '@/utils/businessRules'
 
 const route = useRoute()
 const router = useRouter()

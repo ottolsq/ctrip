@@ -164,6 +164,7 @@ import {
   updateTemplate,
   deleteTemplate
 } from '@/api/admin/blindbox'
+import { parseRuleConfig, mergeRuleConfig } from '@/utils/businessRules'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -193,7 +194,8 @@ const form = reactive({
   status: 'ACTIVE',
   activityRange: [],
   description: '',
-  discount: null
+  discount: null,
+  originalRule: {}
 })
 
 const rules = {
@@ -240,15 +242,6 @@ function formatDateTime(value) {
     return `${y}-${pad(m)}-${pad(d)} ${pad(h)}:${pad(min)}`
   }
   return String(value).replace('T', ' ').slice(0, 16)
-}
-
-function parseRuleConfig(ruleConfig) {
-  if (!ruleConfig) return {}
-  try {
-    return JSON.parse(ruleConfig)
-  } catch {
-    return {}
-  }
 }
 
 function buildParams() {
@@ -306,6 +299,7 @@ function resetForm() {
   form.activityRange = []
   form.description = ''
   form.discount = null
+  form.originalRule = {}
 }
 
 function openCreate() {
@@ -328,6 +322,7 @@ function openEdit(row) {
     : []
   form.description = rule.description || ''
   form.discount = rule.discount ?? null
+  form.originalRule = rule
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
 }
@@ -349,16 +344,13 @@ function buildPayload() {
     if (!form.id || form.stock !== form.originalStock) {
       payload.stock = form.stock
     }
-    const ruleConfig = {
-      activityStartTime: form.activityRange[0],
-      activityEndTime: form.activityRange[1]
-    }
-    if (form.description) {
-      ruleConfig.description = form.description
-    }
-    if (form.discount !== null && form.discount !== undefined) {
-      ruleConfig.discount = form.discount
-    }
+    const ruleConfig = mergeRuleConfig(
+      form.originalRule,
+      form.activityRange[0],
+      form.activityRange[1],
+      form.description,
+      form.discount
+    )
     payload.ruleConfig = JSON.stringify(ruleConfig)
   }
   return payload

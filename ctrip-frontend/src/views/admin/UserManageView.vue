@@ -125,6 +125,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUsers, getUser, banUser, unbanUser } from '@/api/admin/user'
+import { canBanUser } from '@/utils/businessRules'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
@@ -236,9 +237,7 @@ function handleSizeChange(size) {
 }
 
 function canBan(row) {
-  return row.role !== 'ADMIN'
-    && row.status !== 'DELETED'
-    && row.id !== userStore.userId
+  return canBanUser(row, userStore.userId)
 }
 
 async function handleBan(row) {
