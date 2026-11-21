@@ -1,6 +1,7 @@
 package com.ctrip.content.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.BusinessException;
@@ -126,18 +127,23 @@ class AdminGuideServiceImplTest {
     }
 
     @Test
-    @DisplayName("通过审核：置 PUBLISHED、加布隆、清缓存、发事件")
+    @DisplayName("通过审核：条件更新 PUBLISHED、加布隆、清缓存、发事件")
     void approve_pending_shouldPublishAddBloomEvictAndPublishEvent() {
         when(guideMapper.selectById(1L)).thenReturn(guide(GuideStatus.PENDING));
+        when(guideMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         adminGuideService.approve(1L, 99L);
 
-        ArgumentCaptor<Guide> captor = ArgumentCaptor.forClass(Guide.class);
-        verify(guideMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(GuideStatus.PUBLISHED);
-        assertThat(captor.getValue().getRejectReason()).isNull();
-        assertThat(captor.getValue().getReviewedBy()).isEqualTo(99L);
-        assertThat(captor.getValue().getReviewedAt()).isNotNull();
+        ArgumentCaptor<LambdaUpdateWrapper<Guide>> captor =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(guideMapper).update(isNull(), captor.capture());
+        LambdaUpdateWrapper<Guide> wrapper = captor.getValue();
+        assertThat(wrapper.getSqlSet())
+                .contains("status", "reject_reason", "reviewed_by", "reviewed_at");
+        assertThat(wrapper.getParamNameValuePairs().values())
+                .contains(GuideStatus.PUBLISHED, 99L)
+                .anyMatch(value -> value instanceof LocalDateTime);
+        assertThat(wrapper.getSqlSegment()).contains("id", "status");
         verify(guideBloomFilter).add(CacheConfig.blogKey(1L));
         verify(cacheService).evict("guide:1");
         verify(cacheService).evictByPattern("guide:list:*");
@@ -152,26 +158,63 @@ class AdminGuideServiceImplTest {
 
         assertThatThrownBy(() -> adminGuideService.approve(1L, 99L))
                 .isInstanceOf(BusinessException.class);
-        verify(guideMapper, never()).updateById(any(Guide.class));
+        verify(guideMapper, never()).update(any(), any());
         verifyNoInteractions(guideBloomFilter);
     }
 
     @Test
-    @DisplayName("驳回：写入理由与审核人并发送事件")
+    @DisplayName("通过审核：条件更新 0 行（并发）拒绝且不发副作用")
+    void approve_conditionalUpdateZeroRows_shouldThrow() {
+        when(guideMapper.selectById(1L)).thenReturn(guide(GuideStatus.PENDING));
+        when(guideMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> adminGuideService.approve(1L, 99L))
+                .isInstanceOf(BusinessException.class);
+        verifyNoInteractions(guideBloomFilter);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("驳回：条件更新写入理由与审核人并发送事件")
     void reject_pending_shouldSetReasonAndPublishEvent() {
         when(guideMapper.selectById(1L)).thenReturn(guide(GuideStatus.PENDING));
+        when(guideMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         adminGuideService.reject(1L, 99L, "内容不符合规范");
 
-        ArgumentCaptor<Guide> captor = ArgumentCaptor.forClass(Guide.class);
-        verify(guideMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(GuideStatus.REJECTED);
-        assertThat(captor.getValue().getRejectReason()).isEqualTo("内容不符合规范");
-        assertThat(captor.getValue().getReviewedBy()).isEqualTo(99L);
-        assertThat(captor.getValue().getReviewedAt()).isNotNull();
+        ArgumentCaptor<LambdaUpdateWrapper<Guide>> captor =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(guideMapper).update(isNull(), captor.capture());
+        LambdaUpdateWrapper<Guide> wrapper = captor.getValue();
+        assertThat(wrapper.getSqlSet())
+                .contains("status", "reject_reason", "reviewed_by", "reviewed_at");
+        assertThat(wrapper.getParamNameValuePairs().values())
+                .contains(GuideStatus.REJECTED, 99L, "内容不符合规范");
         verify(cacheService).evict("guide:1");
         verify(eventPublisher).publishContentAuditEvent(
                 eq("GUIDE_REJECTED"), eq(1L), eq(10L), eq(99L), eq("内容不符合规范"));
+    }
+
+    @Test
+    @DisplayName("非 PENDING 不可驳回")
+    void reject_nonPending_shouldThrow() {
+        when(guideMapper.selectById(1L)).thenReturn(guide(GuideStatus.PUBLISHED));
+
+        assertThatThrownBy(() -> adminGuideService.reject(1L, 99L, "理由"))
+                .isInstanceOf(BusinessException.class);
+        verify(guideMapper, never()).update(any(), any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("驳回：条件更新 0 行（并发）拒绝且不发副作用")
+    void reject_conditionalUpdateZeroRows_shouldThrow() {
+        when(guideMapper.selectById(1L)).thenReturn(guide(GuideStatus.PENDING));
+        when(guideMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> adminGuideService.reject(1L, 99L, "理由"))
+                .isInstanceOf(BusinessException.class);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

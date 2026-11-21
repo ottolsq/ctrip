@@ -1,6 +1,7 @@
 package com.ctrip.content.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
@@ -128,14 +129,16 @@ public class AdminGuideServiceImpl implements AdminGuideService {
     public void approve(Long guideId, Long operatorId) {
         Guide guide = requirePending(guideId);
 
-        Guide update = Guide.builder()
-                .id(guideId)
-                .status(GuideStatus.PUBLISHED)
-                .rejectReason(null)
-                .reviewedBy(operatorId)
-                .reviewedAt(LocalDateTime.now())
-                .build();
-        guideMapper.updateById(update);
+        int updated = guideMapper.update(null, new LambdaUpdateWrapper<Guide>()
+                .eq(Guide::getId, guideId)
+                .eq(Guide::getStatus, GuideStatus.PENDING)
+                .set(Guide::getStatus, GuideStatus.PUBLISHED)
+                .set(Guide::getRejectReason, null)
+                .set(Guide::getReviewedBy, operatorId)
+                .set(Guide::getReviewedAt, LocalDateTime.now()));
+        if (updated == 0) {
+            throw new BusinessException("攻略状态已变化，请刷新后重试");
+        }
 
         AfterCommitExecutor.run(() -> {
             guideBloomFilter.add(CacheConfig.blogKey(guideId));
@@ -156,14 +159,16 @@ public class AdminGuideServiceImpl implements AdminGuideService {
         Guide guide = requirePending(guideId);
         String trimmedReason = reason.trim();
 
-        Guide update = Guide.builder()
-                .id(guideId)
-                .status(GuideStatus.REJECTED)
-                .rejectReason(trimmedReason)
-                .reviewedBy(operatorId)
-                .reviewedAt(LocalDateTime.now())
-                .build();
-        guideMapper.updateById(update);
+        int updated = guideMapper.update(null, new LambdaUpdateWrapper<Guide>()
+                .eq(Guide::getId, guideId)
+                .eq(Guide::getStatus, GuideStatus.PENDING)
+                .set(Guide::getStatus, GuideStatus.REJECTED)
+                .set(Guide::getRejectReason, trimmedReason)
+                .set(Guide::getReviewedBy, operatorId)
+                .set(Guide::getReviewedAt, LocalDateTime.now()));
+        if (updated == 0) {
+            throw new BusinessException("攻略状态已变化，请刷新后重试");
+        }
 
         AfterCommitExecutor.run(() -> {
             evictGuideCaches(guideId);
