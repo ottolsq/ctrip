@@ -117,6 +117,27 @@ class CommentAdminServiceImplTest {
     }
 
     @Test
+    @DisplayName("删除评论：三级回复也能级联")
+    void adminDeleteComment_depth3_shouldCascadeAllDescendants() {
+        Comment parent = comment(1L, 10L, 2L, null, "根评论");
+        Comment child = comment(2L, 10L, 3L, 1L, "二级回复");
+        Comment grandchild = comment(3L, 10L, 4L, 2L, "三级回复");
+        when(commentMapper.selectById(1L)).thenReturn(parent);
+        when(commentMapper.selectList(any()))
+                .thenReturn(List.of(child), List.of(grandchild), List.of());
+
+        commentService.adminDeleteComment(1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaQueryWrapper<Comment>> captor =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(commentMapper).delete(captor.capture());
+        captor.getValue().getSqlSegment();
+        assertThat(captor.getValue().getParamNameValuePairs().values())
+                .contains(1L, 2L, 3L);
+    }
+
+    @Test
     @DisplayName("删除不存在的评论：404")
     void adminDeleteComment_missing_shouldThrow() {
         when(commentMapper.selectById(1L)).thenReturn(null);

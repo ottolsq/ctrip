@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import com.ctrip.common.tx.AfterCommitExecutor;
 import com.ctrip.content.cache.CacheService;
 import com.ctrip.content.converter.CommentConverter;
 import com.ctrip.content.dto.request.CreateCommentRequest;
@@ -182,8 +183,10 @@ public class CommentServiceImpl implements CommentService {
         commentMapper.delete(new LambdaQueryWrapper<Comment>()
                 .in(Comment::getId, idsToDelete));
 
-        cacheService.evict("guide:" + comment.getGuideId());
-        cacheService.evictByPattern("guide:list:*");
+        AfterCommitExecutor.run(() -> {
+            cacheService.evict("guide:" + comment.getGuideId());
+            cacheService.evictByPattern("guide:list:*");
+        });
     }
 
     // --- 私有辅助 ---
@@ -217,19 +220,23 @@ public class CommentServiceImpl implements CommentService {
     }
 
     /**
-     * 递归收集指定评论的所有子孙评论 ID。
+     * 广度优先收集指定评论的所有子孙评论 ID（支持任意层级）。
      */
     private List<Long> collectDescendants(Long parentId) {
-        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Comment::getParentId, parentId)
-                .select(Comment::getId);
-        List<Comment> children = commentMapper.selectList(wrapper);
-        if (children.isEmpty()) {
-            return List.of();
-        }
-        List<Long> ids = children.stream().map(Comment::getId).collect(java.util.stream.Collectors.toList());
-        for (Long childId : ids) {
-            ids.addAll(collectDescendants(childId));
+        List<Long> ids = new ArrayList<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        queue.add(parentId);
+
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(Comment::getParentId, current)
+                    .select(Comment::getId);
+            List<Comment> children = commentMapper.selectList(wrapper);
+            for (Comment child : children) {
+                ids.add(child.getId());
+                queue.add(child.getId());
+            }
         }
         return ids;
     }

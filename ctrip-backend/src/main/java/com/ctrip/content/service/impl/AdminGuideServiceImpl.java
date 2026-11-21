@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import com.ctrip.common.tx.AfterCommitExecutor;
 import com.ctrip.config.CacheConfig;
 import com.ctrip.content.cache.CacheService;
 import com.ctrip.content.converter.GuideConverter;
@@ -25,8 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -138,9 +137,12 @@ public class AdminGuideServiceImpl implements AdminGuideService {
                 .build();
         guideMapper.updateById(update);
 
-        guideBloomFilter.add(CacheConfig.blogKey(guideId));
-        evictGuideCaches(guideId);
-        publishAfterCommit("GUIDE_APPROVED", guide, operatorId, null);
+        AfterCommitExecutor.run(() -> {
+            guideBloomFilter.add(CacheConfig.blogKey(guideId));
+            evictGuideCaches(guideId);
+            eventPublisher.publishContentAuditEvent(
+                    "GUIDE_APPROVED", guideId, guide.getAuthorId(), operatorId, null);
+        });
 
         log.info("攻略审核通过: guideId={}, operatorId={}", guideId, operatorId);
     }
@@ -163,8 +165,11 @@ public class AdminGuideServiceImpl implements AdminGuideService {
                 .build();
         guideMapper.updateById(update);
 
-        evictGuideCaches(guideId);
-        publishAfterCommit("GUIDE_REJECTED", guide, operatorId, trimmedReason);
+        AfterCommitExecutor.run(() -> {
+            evictGuideCaches(guideId);
+            eventPublisher.publishContentAuditEvent(
+                    "GUIDE_REJECTED", guideId, guide.getAuthorId(), operatorId, trimmedReason);
+        });
 
         log.info("攻略审核驳回: guideId={}, operatorId={}", guideId, operatorId);
     }
@@ -203,21 +208,5 @@ public class AdminGuideServiceImpl implements AdminGuideService {
     private void evictGuideCaches(Long guideId) {
         cacheService.evict(CACHE_KEY_GUIDE + guideId);
         cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
-    }
-
-    private void publishAfterCommit(String eventType, Guide guide,
-                                    Long operatorId, String reason) {
-        Runnable publish = () -> eventPublisher.publishContentAuditEvent(
-                eventType, guide.getId(), guide.getAuthorId(), operatorId, reason);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    publish.run();
-                }
-            });
-        } else {
-            publish.run();
-        }
     }
 }

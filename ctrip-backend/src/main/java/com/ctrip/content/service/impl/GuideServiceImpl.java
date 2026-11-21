@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.common.exception.AuthenticationException;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import com.ctrip.common.tx.AfterCommitExecutor;
 import com.ctrip.config.CacheConfig;
 import com.ctrip.content.cache.CacheService;
 import com.ctrip.content.converter.GuideConverter;
@@ -32,8 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -264,12 +263,14 @@ public class GuideServiceImpl implements GuideService {
                 .build();
         guideMapper.updateById(update);
 
-        cacheService.evict(CACHE_KEY_GUIDE + id);
-        cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
-
-        if (newStatus == GuideStatus.PENDING) {
-            publishAfterCommit("GUIDE_SUBMITTED", id, guide.getAuthorId());
-        }
+        boolean notifySubmitted = newStatus == GuideStatus.PENDING;
+        AfterCommitExecutor.run(() -> {
+            evictGuideCaches(id);
+            if (notifySubmitted) {
+                eventPublisher.publishContentAuditEvent(
+                        "GUIDE_SUBMITTED", id, guide.getAuthorId(), null, null);
+            }
+        });
 
         log.info("更新攻略: id={}, status={}", id, newStatus);
         return buildGuideResponse(requireGuide(id));
@@ -339,10 +340,11 @@ public class GuideServiceImpl implements GuideService {
                 .build();
         guideMapper.updateById(update);
 
-        cacheService.evict(CACHE_KEY_GUIDE + guideId);
-        cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
-
-        publishAfterCommit("GUIDE_SUBMITTED", guideId, guide.getAuthorId());
+        AfterCommitExecutor.run(() -> {
+            evictGuideCaches(guideId);
+            eventPublisher.publishContentAuditEvent(
+                    "GUIDE_SUBMITTED", guideId, guide.getAuthorId(), null, null);
+        });
 
         log.info("攻略提交审核: id={}, authorId={}", guideId, userId);
         return buildGuideResponse(requireGuide(guideId));
@@ -414,19 +416,9 @@ public class GuideServiceImpl implements GuideService {
                 || request.imageUrls() != null;
     }
 
-    private void publishAfterCommit(String eventType, Long guideId, Long authorId) {
-        Runnable publish = () -> eventPublisher.publishContentAuditEvent(
-                eventType, guideId, authorId, null, null);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    publish.run();
-                }
-            });
-        } else {
-            publish.run();
-        }
+    private void evictGuideCaches(Long guideId) {
+        cacheService.evict(CACHE_KEY_GUIDE + guideId);
+        cacheService.evictByPattern(CACHE_KEY_GUIDE_LIST + "*");
     }
 
     private Guide requireGuide(Long id) {

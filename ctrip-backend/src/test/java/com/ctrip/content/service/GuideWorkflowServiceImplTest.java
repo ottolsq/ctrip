@@ -32,6 +32,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RBloomFilter;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -216,6 +218,34 @@ class GuideWorkflowServiceImplTest {
         verify(cacheService).evictByPattern("guide:list:*");
         verify(eventPublisher).publishContentAuditEvent(
                 eq("GUIDE_SUBMITTED"), eq(1L), eq(10L), isNull(), isNull());
+    }
+
+    @Test
+    @DisplayName("编辑已发布：缓存失效与事件延迟到事务提交后")
+    void updateGuide_published_shouldDeferCacheEvictionUntilAfterCommit() {
+        AtomicReference<Guide> current =
+                new AtomicReference<>(guide(1L, 10L, GuideStatus.PUBLISHED));
+        when(guideMapper.selectById(1L)).thenAnswer(invocation -> current.get());
+        stubUpdateMutatesCurrent(current);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            guideService.updateGuide(1L, 10L,
+                    new UpdateGuideRequest("new title", null, null, null, null));
+
+            verify(cacheService, never()).evict(any());
+            verify(eventPublisher, never()).publishContentAuditEvent(
+                    any(), any(), any(), any(), any());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            verify(cacheService).evict("guide:1");
+            verify(cacheService).evictByPattern("guide:list:*");
+            verify(eventPublisher).publishContentAuditEvent(
+                    eq("GUIDE_SUBMITTED"), eq(1L), eq(10L), isNull(), isNull());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
