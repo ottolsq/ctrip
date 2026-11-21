@@ -9,12 +9,13 @@
 | 项目 | 命令 | 结果 |
 |------|------|------|
 | 后端全量测试 | `cd ctrip-backend && ./mvnw test` | **155/155 通过** |
-| 前端规则单测 | `cd ctrip-frontend && npm test` | **4/4 通过** |
+| 前端规则单测 | `cd ctrip-frontend && npm test` | **5/5 通过** |
 | 前端构建 | `cd ctrip-frontend && npm run build` | 通过 |
 | 全部 API E2E（经 nginx） | `BASE_URL=http://127.0.0.1:8088/api/v1 python -I ctrip-backend/scripts/run_all_e2e.py` | **ALL E2E PASS（144.3s）** |
 | 并发压测（经 nginx） | `BASE_URL=http://127.0.0.1:8088/api/v1 python -I ctrip-backend/scripts/stress_blindbox.py` | **STRESS PASS** |
 | 部署首页 | `curl -w "%{http_code}" http://localhost:8088/` | 200 |
 | 部署 API | `curl -w "%{http_code}" http://localhost:8088/api/v1/banners` | 200 |
+| 部署上传静态文件 | `curl .../uploads/images/0ad2d6a7-....jpg` | 200（从 `ctrip-backend` 目录启动 jar） |
 | 部署 E2E | `BASE_URL=http://127.0.0.1:8088/api/v1 python -I .../e2e_admin_p14.py` | `E2E ADMIN P1.4 PASS` |
 
 E2E 运行器实测发生 1 次注册 429：等待 65 秒后重跑 `e2e_admin_p12.py` 成功，其余脚本一次通过。
@@ -25,7 +26,7 @@ E2E 运行器实测发生 1 次注册 429：等待 65 秒后重跑 `e2e_admin_p1
 模板: LIMITED stock=10
 requests=20 success=10 failed=10
 wall=0.261s rps=76.7 p95=241.7ms stock_after=0
-失败全部为 400 库存不足
+失败全部为 400（采样输出均为“库存不足”）
 ```
 
 结论：20 并发下成功订单恰为 10，库存归零，无 5xx、无超卖。
@@ -47,12 +48,12 @@ wall=0.261s rps=76.7 p95=241.7ms stock_after=0
 
 | 检查项 | 验证方式 | 结果 |
 |--------|----------|------|
-| 内容运营点击“后台管理”进入攻略审核而非 403 | `router/admin.js` 角色感知 redirect + 构建 | 代码路径通过，**建议浏览器人工点验** |
+| 内容运营点击“后台管理”进入攻略审核而非 403 | `businessRules.test.js` `adminHomePath` + router 接入 | 通过 |
 | 已封禁用户不显示“封禁”按钮 | `businessRules.test.js` `canBanUser` | 通过 |
 | 盲盒确认订单页显示规则 description | `businessRules.test.js` `ruleDescription` | 通过 |
 | 模板编辑保留未知 `ruleConfig` 字段 | `businessRules.test.js` `mergeRuleConfig` | 通过 |
-| 首页轮播/推荐有数据展示、无数据隐藏 | 公开 API E2E + `v-if` + 空 slot 断言 | 接口通过，**视觉待人工确认** |
-| 数据概览数字加载 | Dashboard API E2E + 前端构建 | 接口通过，**视觉待人工确认** |
+| 首页轮播/推荐有数据展示、无数据隐藏 | 公开 API E2E + `v-if` + 空 slot 断言 | 接口通过，**视觉待用户签收** |
+| 数据概览数字加载 | Dashboard API E2E + 前端构建 | 接口通过，**视觉待用户签收** |
 | 普通用户/运营访问管理端 403 | P1.4 E2E（6 次 403） | 通过 |
 | 非法枚举/请求体返回 400 | `GlobalExceptionHandlerTest` | 通过 |
 | 审核并发后到者 400 | `AdminGuideServiceImplTest` 条件更新 0 行 | 通过 |

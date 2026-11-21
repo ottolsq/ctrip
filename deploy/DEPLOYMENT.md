@@ -46,6 +46,8 @@ bash deploy/start.sh
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/api/v1/banners
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://localhost:8088/uploads/images/0ad2d6a7-883e-450f-949e-f4cb68f59833.jpg
 BASE_URL=http://127.0.0.1:8088/api/v1 python -I ctrip-backend/scripts/e2e_admin_p14.py
 ```
 

@@ -18,6 +18,8 @@ if curl -sf "http://localhost:8081/api/v1/banners" >/dev/null 2>&1; then
   echo "==> 后端 8081 已在运行"
 else
   echo "==> 启动后端 jar（8081）"
+  # 上传目录为相对路径 uploads/images，必须从后端模块目录启动
+  cd "$ROOT/ctrip-backend"
   nohup "$JAVA_HOME/bin/java" -jar "$JAR" --server.port=8081 \
     > "$RUN_DIR/backend.log" 2>&1 &
 fi
@@ -45,8 +47,9 @@ for _ in $(seq 1 20); do
   fi
   sleep 1
 done
-if ! curl -sf "http://localhost:8088/" >/dev/null 2>&1; then
-  echo "nginx 启动失败" >&2
+if ! curl -sf "http://localhost:8088/" >/dev/null 2>&1 \
+  || ! curl -sf "http://localhost:8088/api/v1/banners" >/dev/null 2>&1; then
+  echo "nginx 启动失败或 /api 代理不可用" >&2
   exit 1
 fi
 
