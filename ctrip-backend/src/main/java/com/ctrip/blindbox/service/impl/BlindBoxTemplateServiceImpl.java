@@ -15,6 +15,7 @@ import com.ctrip.blindbox.rule.BlindBoxRuleConfigParser;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
@@ -77,7 +80,8 @@ public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
     @Transactional(readOnly = true)
     public Page<TemplateResponse> listAllTemplates(int page, int limit, BlindBoxType type,
                                                    TemplateStatus status, String keyword) {
-        Page<BlindBoxTemplate> pageObj = new Page<>(page, limit);
+        int effectiveLimit = Math.min(Math.max(limit, 1), MAX_PAGE_SIZE);
+        Page<BlindBoxTemplate> pageObj = new Page<>(page, effectiveLimit);
         LambdaQueryWrapper<BlindBoxTemplate> wrapper = new LambdaQueryWrapper<>();
         if (type != null) {
             wrapper.eq(BlindBoxTemplate::getType, type);
@@ -202,7 +206,12 @@ public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
         if (orderCount > 0) {
             throw new BusinessException("存在关联订单，无法删除该模板");
         }
-        templateMapper.deleteById(id);
+        try {
+            templateMapper.deleteById(id);
+        } catch (DataIntegrityViolationException e) {
+            // check-then-delete 窗口内新建了订单，外键阻止删除
+            throw new BusinessException("存在关联订单，无法删除该模板");
+        }
     }
 
     private void validateCreate(BlindBoxTemplate template) {

@@ -3,6 +3,7 @@ package com.ctrip.blindbox.service;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
 import com.ctrip.blindbox.entity.enums.BlindBoxType;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -206,5 +209,29 @@ class BlindBoxTemplateServiceImplTest {
         templateService.deleteTemplate(1L);
 
         verify(templateMapper).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("后台列表：limit 超过 100 时收敛为 100")
+    void listAllTemplates_shouldClampPageSize() {
+        when(templateMapper.selectPage(any(Page.class), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Page<com.ctrip.blindbox.dto.TemplateResponse> result =
+                templateService.listAllTemplates(1, 500, null, null, null);
+
+        assertThat(result.getSize()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("删除模板：外键冲突转为业务异常")
+    void deleteTemplate_fkViolation_shouldConvertToBusinessException() {
+        when(templateMapper.selectById(1L)).thenReturn(template(BlindBoxType.DAILY, -1, null));
+        when(orderMapper.selectCount(any())).thenReturn(0L);
+        doThrow(new DataIntegrityViolationException("fk"))
+                .when(templateMapper).deleteById(1L);
+
+        assertThatThrownBy(() -> templateService.deleteTemplate(1L))
+                .isInstanceOf(BusinessException.class);
     }
 }
