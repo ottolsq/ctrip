@@ -7,12 +7,12 @@ import com.ctrip.content.entity.Destination;
 import com.ctrip.content.mapper.DestinationMapper;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,7 +32,6 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
 
     private static final String GUARANTEE_KEY_PREFIX = "blindbox:guarantee:";
     private static final String LOCK_KEY_PREFIX = "lock:blindbox:prize:";
-    private static final Duration GUARANTEE_TTL = Duration.ofDays(180);
 
     private final PrizeProperties properties;
     private final StringRedisTemplate redisTemplate;
@@ -40,6 +39,7 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
     private final DestinationMapper destinationMapper;
     private final DoubleSupplier random;
 
+    @Autowired
     public BlindBoxPrizeServiceImpl(PrizeProperties properties,
                                     StringRedisTemplate redisTemplate,
                                     RedissonClient redissonClient,
@@ -131,8 +131,12 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
         if (tier.atLeastRare()) {
             redisTemplate.delete(guaranteeKey);
         } else {
-            redisTemplate.opsForValue().increment(guaranteeKey);
-            redisTemplate.expire(guaranteeKey, GUARANTEE_TTL);
+            Long next = redisTemplate.opsForValue().increment(guaranteeKey);
+            if (next != null) {
+                // 使用 SETEX 写回并续期，避免部分 Redis 客户端 pExpire 实现递归
+                redisTemplate.opsForValue().set(
+                        guaranteeKey, String.valueOf(next), 180, TimeUnit.DAYS);
+            }
         }
 
         return new DrawnPrize(

@@ -14,7 +14,6 @@ import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -160,7 +159,7 @@ class BlindBoxPrizeServiceImplTest {
         assertThat(prize.tier()).isEqualTo("COMMON");
         assertThat(prize.guaranteed()).isFalse();
         verify(valueOperations).increment("blindbox:guarantee:9:1");
-        verify(redisTemplate).expire("blindbox:guarantee:9:1", Duration.ofDays(180));
+        verify(valueOperations).set("blindbox:guarantee:9:1", "4", 180, TimeUnit.DAYS);
         verify(redisTemplate, never()).delete(anyString());
     }
 }

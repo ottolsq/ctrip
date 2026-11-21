@@ -44,11 +44,6 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
     }
 
     @Override
-    public SchemeResponse generateScheme(BlindBoxPreference preference) {
-        return generateScheme(preference, null);
-    }
-
-    @Override
     public SchemeResponse generateScheme(BlindBoxPreference preference, DrawnPrize prize) {
         // 构造 AI 请求；prize 非空时固定目的地
         AiSchemeRequest request = new AiSchemeRequest(

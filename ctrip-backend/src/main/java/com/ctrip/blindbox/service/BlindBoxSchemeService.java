@@ -19,8 +19,6 @@ public interface BlindBoxSchemeService {
      * @param preference 用户预选参数
      * @return 生成的旅行方案
      */
-    SchemeResponse generateScheme(BlindBoxPreference preference);
-
     /**
      * 按抽中的固定目的地生成方案；AI 不得更改目的地。
      */
