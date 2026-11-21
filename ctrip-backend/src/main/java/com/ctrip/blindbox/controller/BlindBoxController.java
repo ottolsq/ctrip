@@ -2,8 +2,10 @@ package com.ctrip.blindbox.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.dto.OrderResponse;
+import com.ctrip.blindbox.dto.ProbabilityResponse;
 import com.ctrip.blindbox.dto.TemplateResponse;
 import com.ctrip.blindbox.dto.ResultResponse;
+import com.ctrip.blindbox.prize.BlindBoxPrizeService;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxResultService;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
@@ -25,13 +27,16 @@ public class BlindBoxController {
     private final BlindBoxTemplateService templateService;
     private final BlindBoxResultService resultService;
     private final BlindBoxOrderService orderService;
+    private final BlindBoxPrizeService prizeService;
 
     public BlindBoxController(BlindBoxTemplateService templateService,
                               BlindBoxResultService resultService,
-                              BlindBoxOrderService orderService) {
+                              BlindBoxOrderService orderService,
+                              BlindBoxPrizeService prizeService) {
         this.templateService = templateService;
         this.resultService = resultService;
         this.orderService = orderService;
+        this.prizeService = prizeService;
     }
 
     /**
@@ -53,6 +58,16 @@ public class BlindBoxController {
     public ResponseEntity<ApiResponse<TemplateResponse>> getTemplate(@PathVariable Long id) {
         TemplateResponse result = templateService.getTemplateDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
+    /**
+     * 概率公示（公开）。
+     */
+    @GetMapping("/{id}/probabilities")
+    public ResponseEntity<ApiResponse<ProbabilityResponse>> getProbabilities(@PathVariable Long id) {
+        // 仅上架模板可查看概率
+        templateService.getTemplateDetail(id);
+        return ResponseEntity.ok(ApiResponse.ok(prizeService.getProbabilities()));
     }
 
     /**
