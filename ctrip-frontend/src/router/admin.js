@@ -81,6 +81,16 @@ const adminRoutes = [
         }
       },
       {
+        path: 'recommendations',
+        name: 'AdminRecommendationManage',
+        component: () => import('@/views/admin/RecommendationManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '推荐位'
+        }
+      },
+      {
         path: 'users',
         name: 'AdminUserManage',
         component: () => import('@/views/admin/UserManageView.vue'),
