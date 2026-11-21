@@ -139,7 +139,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**134/134 通过**（P1.3 新增模板规则/活动窗口/后台订单/日期序列化测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**146/146 通过**（P1.4 新增轮播图/推荐位/数据概览测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -196,6 +196,16 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 ```
 
 覆盖：DAILY 库存强制 -1 且编辑不报错；LIMITED 活动窗口/库存校验；非法模板 400；窗口内下单库存 5→4；活动结束/未开始均 400；仅改名不覆盖并发库存；管理端订单列表/详情（日期为 ISO 字符串）；开盒后按 OPENED 退款，库存恢复 5 且仅一次；重复退款、删除有订单模板 400；内容运营/普通用户访问管理端 403。
+
+### 7.6 运营与数据概览 P1.4 E2E
+
+需先重启后端加载 P1.4 代码：
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p14.py
+```
+
+覆盖：Banner 创建/启用窗口/停用/删除与公开过滤；推荐位目的地/攻略装配，未发布攻略跳过；Dashboard 字段与 7 天序列；运营访问管理端 403；公开接口免登录。
 
 ## 8. 安全说明
 

@@ -1,4 +1,4 @@
-# 趣行旅行平台 管理端 API（P1.1 + P1.2 + P1.3）
+# 趣行旅行平台 管理端 API（P1.1 + P1.2 + P1.3 + P1.4）
 
 > 前缀：`/api/v1/admin`
 > 认证：JWT Bearer Token；用户管理/盲盒模板/订单管理要求 `ADMIN`，攻略审核/评论管理/内容数据允许 `ADMIN` 与 `CONTENT_OPERATOR`。
@@ -14,7 +14,7 @@
 种子账号由 `docs/SQL/ctrip_admin_seed.sql` 写入，仅限本地开发/答辩演示。
 
 - `/api/v1/admin/**` 的 URL 基线允许 ADMIN/CONTENT_OPERATOR；
-- 用户管理、盲盒模板、订单管理端点额外使用 `@PreAuthorize("hasRole('ADMIN')")`，内容运营/普通用户访问返回 **403**。
+- 用户管理、盲盒模板、订单管理、轮播图、推荐位、数据概览端点额外使用 `@PreAuthorize("hasRole('ADMIN')")`，内容运营/普通用户访问返回 **403**。
 
 ## 2. 用户列表
 
@@ -307,3 +307,115 @@ python -I ctrip-backend/scripts/e2e_admin_p13.py
 ```
 
 覆盖：DAILY 库存 -1；LIMITED 窗口校验；非法模板 400；窗口内下单库存 5→4；窗口外下单 400；订单列表/详情；退款后库存恢复 5（仅一次）；重复退款/删除有订单模板 400；普通用户 403。
+
+## 15. 轮播图管理（ADMIN）
+
+### 管理端
+
+`GET /api/v1/admin/banners?page&size&status`
+
+响应项：`id, title, imageUrl, linkUrl, sortOrder, status, startAt, endAt, createdAt`。
+排序：`sortOrder` 升序、`id` 升序；`size` 限制 1..100。
+
+`POST /api/v1/admin/banners`
+
+```json
+{
+  "title": "夏日旅行季",
+  "imageUrl": "https://img.example.com/banner.jpg",
+  "linkUrl": "/destinations",
+  "sortOrder": 0,
+  "status": "ENABLED",
+  "startAt": "2026-11-21T00:00:00",
+  "endAt": "2026-11-30T23:59:59"
+}
+```
+
+- `title` / `imageUrl` 必填；`status` 默认 `ENABLED`，`sortOrder` 默认 0；
+- `startAt/endAt` 均可为空；两者都非空时必须 `startAt < endAt`，否则 **400**。
+- `PUT /{id}` 全字段更新；`DELETE /{id}` 不存在 → **404**。
+
+### 公开端
+
+`GET /api/v1/banners`（免登录）
+
+仅返回 `status=ENABLED` 且当前时间处于 `[startAt, endAt]`（空表示不限）的记录，按 `sortOrder` 升序；无数据返回空数组，首页据此隐藏轮播区。
+
+## 16. 推荐位管理（ADMIN）
+
+### 管理端
+
+`GET /api/v1/admin/recommendations?page&size&slot&status`
+
+响应项：`id, slot, title, targetType, targetId, sortOrder, status, startAt, endAt, createdAt`。
+`targetType`：`GUIDE` / `DESTINATION` / `BLIND_BOX_TEMPLATE`。
+
+`POST /api/v1/admin/recommendations`
+
+```json
+{
+  "slot": "home_featured",
+  "title": "杭州精选",
+  "targetType": "DESTINATION",
+  "targetId": 1,
+  "sortOrder": 0,
+  "status": "ENABLED",
+  "startAt": null,
+  "endAt": null
+}
+```
+
+- 字段必填；目标必须存在，否则 **400**（`推荐目标不存在`）；
+- 时间窗规则同轮播图；`PUT /{id}`、`DELETE /{id}` 同模板 CRUD 约定。
+
+### 公开端
+
+`GET /api/v1/recommendations?slot=home_featured`（免登录）
+
+仅返回启用且窗口内的记录，按 `sortOrder` 升序，并装配：
+
+| 字段 | 说明 |
+|------|------|
+| targetTitle | 攻略标题 / 目的地名称 / 盲盒模板名称 |
+| coverUrl | 攻略或目的地封面；盲盒模板为 null |
+| linkUrl | `/guides/{id}` / `/destinations/{id}` / `/blind-box/{id}` |
+
+攻略必须 `PUBLISHED`、盲盒模板必须 `ACTIVE`，目标缺失/未发布/已下架时跳过，不产生死链。
+
+## 17. 平台数据概览（ADMIN）
+
+`GET /api/v1/admin/dashboard`
+
+```json
+{
+  "totalUsers": 100,
+  "todayNewUsers": 3,
+  "totalGuides": 40,
+  "pendingGuides": 2,
+  "publishedGuides": 30,
+  "totalOrders": 50,
+  "pendingOrders": 1,
+  "paidOrders": 5,
+  "processingOrders": 2,
+  "openedOrders": 30,
+  "refundedOrders": 3,
+  "cancelledOrders": 9,
+  "totalSales": 2680.00,
+  "last7Days": [
+    { "date": "2026-11-15", "newUsers": 1, "newOrders": 2 }
+  ],
+  "bannerCount": 3,
+  "recommendationCount": 5
+}
+```
+
+- `last7Days` 固定 7 项，缺失日期补 0；
+- `totalSales` 仅统计 `PAID / PROCESSING / OPENED` 的 `payAmount`，退款/取消不计。
+
+## 18. P1.4 E2E
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p14.py
+```
+
+覆盖：Banner CRUD 与时间窗/启停过滤；推荐位目标装配、未发布攻略跳过；Dashboard 字段与 7 天序列；运营/普通用户 403；公开接口免登录。
