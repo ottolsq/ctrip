@@ -139,7 +139,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**85/85 通过**。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**105/105 通过**。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -176,6 +176,16 @@ python -I ctrip-backend/scripts/e2e_admin_p11.py
 3. 封禁 → 旧 access token 立即 401；
 4. 解封 → 恢复原状态并重新登录；
 5. 内容运营访问 `/admin/users`、`/admin/blind-box/templates` → 403。
+
+### 7.4 内容运营 P1.2 E2E
+
+需先重启后端加载 P1.2 代码：
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p12.py
+```
+
+覆盖：作者创建/提交攻略 → 运营驳回（理由）→ 作者修改重提 → 运营通过 → 公共可见；编辑已发布转审核中；评论检索/删除；内容数据；普通用户访问管理端 403。
 
 ## 8. 安全说明
 

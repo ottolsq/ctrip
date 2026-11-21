@@ -22,6 +22,9 @@
   - [攻略详情](#攻略详情)
   - [发布攻略](#发布攻略)
   - [编辑攻略](#编辑攻略)
+  - [我的攻略](#我的攻略)
+  - [作者管理详情](#作者管理详情)
+  - [提交审核](#提交审核)
   - [删除攻略](#删除攻略)
   - [点赞攻略](#点赞攻略)
   - [取消点赞](#取消点赞)
@@ -502,8 +505,7 @@ curl -X GET "http://localhost:8080/api/v1/guides/1"
   "content": "# Day 1: 西湖环线\n\n第一天从断桥出发...",
   "destinationId": 1,
   "coverUrl": "https://example.com/covers/hangzhou-guide.jpg",
-  "imageUrls": "[\"url1\",\"url2\",\"url3\"]",
-  "status": "PUBLISHED"
+  "imageUrls": "[\"url1\",\"url2\",\"url3\"]"
 }
 ```
 
@@ -514,7 +516,8 @@ curl -X GET "http://localhost:8080/api/v1/guides/1"
 | destinationId | long | 否 | 关联目的地 ID（可为 null，纯经验贴） |
 | coverUrl | string | 否 | 封面图 URL，最长 500 字符 |
 | imageUrls | string | 否 | 多图 JSON 数组字符串 |
-| status | string | 否 | 发布状态：`DRAFT`（草稿）/ `PUBLISHED`（已发布），默认 `DRAFT` |
+
+> 新攻略固定为 `DRAFT`；客户端不能直接设置状态，需调用“提交审核”接口。
 
 #### 请求示例
 
@@ -525,8 +528,7 @@ curl -X POST "http://localhost:8080/api/v1/guides" \
   -d '{
     "title": "杭州三日游攻略",
     "content": "# Day 1: 西湖环线\n\n第一天从断桥出发...",
-    "destinationId": 1,
-    "status": "PUBLISHED"
+    "destinationId": 1
   }'
 ```
 
@@ -544,9 +546,11 @@ curl -X POST "http://localhost:8080/api/v1/guides" \
     "destinationName": "杭州",
     "coverUrl": null,
     "imageUrls": null,
-    "status": "PUBLISHED",
+    "status": "DRAFT",
     "viewCount": 0,
     "likeCount": 0,
+    "rejectReason": null,
+    "reviewedAt": null,
     "createdAt": "2024-06-01T10:00:00",
     "updatedAt": "2024-06-01T10:00:00"
   },
@@ -587,8 +591,7 @@ curl -X POST "http://localhost:8080/api/v1/guides" \
 ```json
 {
   "title": "杭州四日游攻略（更新版）",
-  "content": "更新后的正文内容...",
-  "status": "PUBLISHED"
+  "content": "更新后的正文内容..."
 }
 ```
 
@@ -599,7 +602,11 @@ curl -X POST "http://localhost:8080/api/v1/guides" \
 | destinationId | long | 否 | 关联目的地 ID |
 | coverUrl | string | 否 | 封面图 URL |
 | imageUrls | string | 否 | 多图 JSON 数组字符串 |
-| status | string | 否 | 发布状态 |
+
+状态规则：
+- DRAFT / REJECTED 编辑后保持 DRAFT，并清空审核字段；
+- PUBLISHED 编辑有内容变化后转为 PENDING，审核通过前不再公开；
+- PENDING 不可编辑（400）。
 
 #### 请求示例
 
@@ -655,6 +662,29 @@ curl -X PUT "http://localhost:8080/api/v1/guides/1" \
 ```
 
 ---
+
+### 我的攻略
+
+`GET /api/v1/guides/mine?page&size&status`
+
+- 认证：需要 JWT Token。
+- 返回当前作者的全部状态攻略（DRAFT/PENDING/PUBLISHED/REJECTED），不走公共缓存。
+- 响应字段：`id, authorId, title, coverUrl, destinationName, status, rejectReason, viewCount, likeCount, commentCount, createdAt, updatedAt`。
+
+### 作者管理详情
+
+`GET /api/v1/guides/{id}/manage`
+
+- 认证：需要 JWT Token（仅作者）。
+- 非作者返回 401/403；不受公共布隆过滤器/缓存限制，可读取任意状态正文与驳回理由。
+
+### 提交审核
+
+`POST /api/v1/guides/{id}/submit`
+
+- 认证：需要 JWT Token（仅作者）。
+- 仅 `DRAFT` / `REJECTED` 可提交；成功后状态为 `PENDING`，清空驳回理由与审核信息。
+- 其他状态返回 400。
 
 ### 删除攻略
 
@@ -1517,8 +1547,9 @@ curl -X DELETE "http://localhost:8080/api/v1/admin/attractions/101" \
 | 值 | 说明 |
 |----|------|
 | DRAFT | 草稿，仅作者可见 |
+| PENDING | 已提交，等待内容运营审核 |
 | PUBLISHED | 已发布，公开可见（列表查询仅返回已发布） |
-| REJECTED | 审核驳回 |
+| REJECTED | 审核驳回（附驳回理由） |
 
 ### 排序方式
 

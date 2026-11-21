@@ -112,3 +112,78 @@
 - 封禁后旧 access token 立即失效；解封后旧 token 若仍在有效期内可恢复使用。
 - Redis 暂不可用时，封禁检查放行并记录告警（可用性优先）；refresh token 已删除，用户最长 15 分钟后自然失效。
 - 用户响应绝不包含 `passwordHash`。
+
+## 8. 攻略审核（ADMIN / CONTENT_OPERATOR）
+
+### 审核列表
+
+`GET /api/v1/admin/guides?page&size&status&keyword&authorId`
+
+- `status`：`DRAFT` / `PENDING` / `PUBLISHED` / `REJECTED`
+- `keyword`：标题模糊匹配
+- 响应项：`id, authorId, authorName, title, status, rejectReason, viewCount, likeCount, createdAt, updatedAt`
+
+### 审核详情
+
+`GET /api/v1/admin/guides/{id}`
+
+返回完整攻略（含正文、驳回理由），不经过公共缓存/布隆过滤器。
+
+### 通过审核
+
+`POST /api/v1/admin/guides/{id}/approve`
+
+- 仅 `PENDING` 可操作；
+- 状态改为 `PUBLISHED`，记录审核人与时间，清空驳回理由；
+- 加入布隆过滤器并清理攻略缓存；
+- 事务提交后发送 `GUIDE_APPROVED`。
+
+### 驳回审核
+
+`POST /api/v1/admin/guides/{id}/reject`
+
+请求体：
+
+```json
+{ "reason": "内容不完整，请补充交通与住宿信息" }
+```
+
+- `reason` 必填，最长 500；
+- 状态改为 `REJECTED`，写入理由/审核人/时间；
+- 清理攻略缓存；事务提交后发送 `GUIDE_REJECTED`。
+
+## 9. 评论管理（ADMIN / CONTENT_OPERATOR）
+
+`GET /api/v1/admin/comments?page&size&guideId&userId&keyword&startDate&endDate`
+
+响应项：`id, guideId, guideTitle, userId, userName, userAvatar, parentId, content, createdAt`。
+
+`DELETE /api/v1/admin/comments/{id}`
+
+- 删除任意评论，级联删除其全部子回复；
+- 清理对应攻略详情/列表缓存。
+
+## 10. 内容数据（ADMIN / CONTENT_OPERATOR）
+
+`GET /api/v1/admin/content/stats`
+
+```json
+{
+  "totalGuides": 10,
+  "draftCount": 2,
+  "pendingCount": 1,
+  "publishedCount": 6,
+  "rejectedCount": 1,
+  "totalViews": 1200,
+  "totalLikes": 88,
+  "totalComments": 35,
+  "topGuides": [
+    { "id": 1, "title": "杭州三日游", "viewCount": 500, "likeCount": 30 }
+  ],
+  "last7Days": [
+    { "date": "2026-11-15", "count": 1 }
+  ]
+}
+```
+
+`last7Days` 固定 7 项，缺失日期补 0。
