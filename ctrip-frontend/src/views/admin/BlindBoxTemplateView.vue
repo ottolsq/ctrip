@@ -189,6 +189,7 @@ const form = reactive({
   type: 'DAILY',
   price: 99,
   stock: 10,
+  originalStock: null,
   status: 'ACTIVE',
   activityRange: [],
   description: '',
@@ -233,6 +234,11 @@ function typeLabel(type) {
 
 function formatDateTime(value) {
   if (!value) return '-'
+  if (Array.isArray(value)) {
+    const [y, m, d, h = 0, min = 0] = value
+    const pad = n => String(n).padStart(2, '0')
+    return `${y}-${pad(m)}-${pad(d)} ${pad(h)}:${pad(min)}`
+  }
   return String(value).replace('T', ' ').slice(0, 16)
 }
 
@@ -295,6 +301,7 @@ function resetForm() {
   form.type = 'DAILY'
   form.price = 99
   form.stock = 10
+  form.originalStock = null
   form.status = 'ACTIVE'
   form.activityRange = []
   form.description = ''
@@ -314,6 +321,7 @@ function openEdit(row) {
   form.type = row.type
   form.price = Number(row.price)
   form.stock = row.type === 'LIMITED' ? row.stock : 10
+  form.originalStock = row.stock
   form.status = row.status
   form.activityRange = rule.activityStartTime && rule.activityEndTime
     ? [rule.activityStartTime, rule.activityEndTime]
@@ -334,10 +342,13 @@ function buildPayload() {
     name: form.name,
     type: form.type,
     price: form.price,
-    status: form.status,
-    stock: form.type === 'DAILY' ? -1 : form.stock
+    status: form.status
   }
   if (form.type === 'LIMITED') {
+    // 编辑时库存未变化则不提交，避免用页面打开时的陈旧库存覆盖并发扣减
+    if (!form.id || form.stock !== form.originalStock) {
+      payload.stock = form.stock
+    }
     const ruleConfig = {
       activityStartTime: form.activityRange[0],
       activityEndTime: form.activityRange[1]

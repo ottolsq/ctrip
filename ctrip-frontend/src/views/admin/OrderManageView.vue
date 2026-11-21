@@ -253,6 +253,11 @@ function statusTagType(status) {
 
 function formatDateTime(value) {
   if (!value) return '-'
+  if (Array.isArray(value)) {
+    const [y, m, d, h = 0, min = 0] = value
+    const pad = n => String(n).padStart(2, '0')
+    return `${y}-${pad(m)}-${pad(d)} ${pad(h)}:${pad(min)}`
+  }
   return String(value).replace('T', ' ').slice(0, 16)
 }
 
