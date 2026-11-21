@@ -2,6 +2,7 @@ package com.ctrip.blindbox.service;
 
 import com.ctrip.blindbox.dto.SchemeResponse;
 import com.ctrip.blindbox.entity.BlindBoxPreference;
+import com.ctrip.blindbox.prize.DrawnPrize;
 
 /**
  * 盲盒方案生成服务接口。
@@ -19,4 +20,9 @@ public interface BlindBoxSchemeService {
      * @return 生成的旅行方案
      */
     SchemeResponse generateScheme(BlindBoxPreference preference);
+
+    /**
+     * 按抽中的固定目的地生成方案；AI 不得更改目的地。
+     */
+    SchemeResponse generateScheme(BlindBoxPreference preference, DrawnPrize prize);
 }

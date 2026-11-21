@@ -19,6 +19,12 @@ public record AiSchemeRequest(
         Integer preferredDays,
 
         /** 其他偏好 JSON（可选扩展字段，如 "不爬山"、"带老人" 等） */
-        String preferences
+        String preferences,
+
+        /** 已抽中的固定目的地（可选；非空时 AI 不得更改） */
+        String destination,
+
+        /** 已抽中的固定目的地 ID（可选） */
+        Long destinationId
 ) {
 }

@@ -159,9 +159,14 @@ public class DashScopeAiSchemeService implements AiSchemeService {
             });
         }
 
+        String destination = request.destination() != null
+                ? request.destination() : ai.destination();
+        Long destinationId = request.destinationId() != null
+                ? request.destinationId() : resolveDestinationId(destination);
+
         return new SchemeOutput(
-                ai.destination(),
-                resolveDestinationId(ai.destination()),
+                destination,
+                destinationId,
                 ai.theme(),
                 ai.days(),
                 itinerary,

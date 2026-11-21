@@ -37,6 +37,12 @@ public class PromptBuilder {
                 ? "用户期望行程天数为 " + request.preferredDays() + " 天。"
                 : "请根据预算等级自动决定天数（ECONOMY=3天，STANDARD=4天，LUXURY=5天）。";
 
+        // 抽奖已确定目的地时必须固定，不允许模型自行更改
+        String destinationHint = (request.destination() != null && !request.destination().isBlank())
+                ? "目的地固定为" + request.destination() + "（由抽奖确定），不得更改；请围绕"
+                    + request.destination() + "生成行程。"
+                : "请选择一个适合的目的地。";
+
         return String.format("""
                 请为以下用户生成旅行方案：
 
@@ -44,6 +50,7 @@ public class PromptBuilder {
                 - 预算等级：%s - %s
                 - 主题偏好：%s
                 - 行程天数：%s
+                - 目的地：%s
 
                 请从 %s 出发，规划到目的地的合理交通方案。
                 请严格按照 JSON 格式返回完整方案。
@@ -53,6 +60,7 @@ public class PromptBuilder {
                 budgetDesc,
                 themeHint,
                 daysHint,
+                destinationHint,
                 request.departureCity());
     }
 }

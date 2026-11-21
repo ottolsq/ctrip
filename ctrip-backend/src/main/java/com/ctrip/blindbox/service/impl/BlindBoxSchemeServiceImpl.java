@@ -5,6 +5,7 @@ import com.ctrip.ai.dto.SchemeOutput;
 import com.ctrip.ai.service.AiSchemeService;
 import com.ctrip.blindbox.dto.SchemeResponse;
 import com.ctrip.blindbox.entity.BlindBoxPreference;
+import com.ctrip.blindbox.prize.DrawnPrize;
 import com.ctrip.blindbox.service.BlindBoxSchemeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,25 +45,33 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
 
     @Override
     public SchemeResponse generateScheme(BlindBoxPreference preference) {
-        // 构造 AI 请求
+        return generateScheme(preference, null);
+    }
+
+    @Override
+    public SchemeResponse generateScheme(BlindBoxPreference preference, DrawnPrize prize) {
+        // 构造 AI 请求；prize 非空时固定目的地
         AiSchemeRequest request = new AiSchemeRequest(
                 preference.getDepartureCity(),
                 preference.getBudgetLevel().name(),
                 preference.getTheme(),
                 null,
-                null
+                null,
+                prize != null ? prize.destinationName() : null,
+                prize != null ? prize.destinationId() : null
         );
 
         try {
-            log.info("调用 AI 生成旅行方案: preferenceId={}, departureCity={}, budget={}",
-                    preference.getId(), preference.getDepartureCity(), preference.getBudgetLevel());
+            log.info("调用 AI 生成旅行方案: preferenceId={}, departureCity={}, budget={}, destination={}",
+                    preference.getId(), preference.getDepartureCity(), preference.getBudgetLevel(),
+                    prize != null ? prize.destinationName() : "AI自选");
             SchemeOutput output = aiSchemeService.generate(request);
-            return convertToSchemeResponse(output, preference);
+            return convertToSchemeResponse(output, preference, prize);
         } catch (Exception e) {
             if (fallbackEnabled) {
                 log.warn("AI 失败，回退到 mock 方案: preferenceId={}, error={}",
                         preference.getId(), e.getMessage());
-                return generateMockScheme(preference);
+                return generateMockScheme(preference, prize);
             } else {
                 throw new com.ctrip.common.exception.BusinessException("AI 方案生成失败: " + e.getMessage());
             }
@@ -70,7 +79,11 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
     }
 
     /** 将 AI 标准化输出转换为盲盒模块的 SchemeResponse。 */
-    private SchemeResponse convertToSchemeResponse(SchemeOutput output, BlindBoxPreference preference) {
+    private SchemeResponse convertToSchemeResponse(SchemeOutput output, BlindBoxPreference preference,
+                                                   DrawnPrize prize) {
+        String destination = prize != null ? prize.destinationName() : output.destination();
+        Long destinationId = prize != null ? prize.destinationId() : output.destinationId();
+
         // itinerary: Map<String, SchemeOutput.DayPlan> → Map<String, Object>
         Map<String, Object> itinerary = new LinkedHashMap<>();
         if (output.itinerary() != null) {
@@ -95,7 +108,7 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
         if (output.transport() != null) {
             transport.put("type", output.transport().type());
             transport.put("departureTime", output.transport().departureTime());
-            transport.put("destination", output.destination());
+            transport.put("destination", destination);
             transport.put("description", output.transport().description());
         }
 
@@ -110,8 +123,8 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
         }
 
         return new SchemeResponse(
-                output.destination(),
-                output.destinationId(),
+                destination,
+                destinationId,
                 output.theme(),
                 preference.getBudgetLevel().name(),
                 output.days(),
@@ -125,11 +138,21 @@ public class BlindBoxSchemeServiceImpl implements BlindBoxSchemeService {
     // ========== 以下为 Mock Fallback 逻辑 ==========
 
     /** 将原有 mock 逻辑提取为独立方法，作为 AI 失败时的 fallback。 */
-    private SchemeResponse generateMockScheme(BlindBoxPreference preference) {
-        String[] dest = selectDestination(preference.getTheme());
-        String destination = dest[0];
-        String theme = dest[1];
-        Long destinationId = Long.valueOf(dest[2]);
+    private SchemeResponse generateMockScheme(BlindBoxPreference preference, DrawnPrize prize) {
+        String destination;
+        String theme;
+        Long destinationId;
+        if (prize != null) {
+            destination = prize.destinationName();
+            destinationId = prize.destinationId();
+            theme = (preference.getTheme() != null && !preference.getTheme().isBlank())
+                    ? preference.getTheme() : "文化";
+        } else {
+            String[] dest = selectDestination(preference.getTheme());
+            destination = dest[0];
+            theme = dest[1];
+            destinationId = Long.valueOf(dest[2]);
+        }
         String budgetLevel = preference.getBudgetLevel().name();
 
         int days = switch (preference.getBudgetLevel()) {
