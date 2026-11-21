@@ -18,6 +18,18 @@
           <el-icon><DataLine /></el-icon>
           <span>数据概览</span>
         </el-menu-item>
+        <el-menu-item index="/admin/guides">
+          <el-icon><Document /></el-icon>
+          <span>攻略审核</span>
+        </el-menu-item>
+        <el-menu-item index="/admin/comments">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>评论管理</span>
+        </el-menu-item>
+        <el-menu-item index="/admin/content-stats">
+          <el-icon><DataLine /></el-icon>
+          <span>内容数据</span>
+        </el-menu-item>
         <el-menu-item v-if="userStore.isAdmin" index="/admin/users">
           <el-icon><User /></el-icon>
           <span>用户管理</span>

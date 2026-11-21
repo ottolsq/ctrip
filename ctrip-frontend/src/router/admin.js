@@ -21,6 +21,36 @@ const adminRoutes = [
         }
       },
       {
+        path: 'guides',
+        name: 'AdminGuideAudit',
+        component: () => import('@/views/admin/GuideAuditView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN', 'CONTENT_OPERATOR'],
+          title: '攻略审核'
+        }
+      },
+      {
+        path: 'comments',
+        name: 'AdminCommentManage',
+        component: () => import('@/views/admin/CommentManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN', 'CONTENT_OPERATOR'],
+          title: '评论管理'
+        }
+      },
+      {
+        path: 'content-stats',
+        name: 'AdminContentStats',
+        component: () => import('@/views/admin/ContentStatsView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN', 'CONTENT_OPERATOR'],
+          title: '内容数据'
+        }
+      },
+      {
         path: 'users',
         name: 'AdminUserManage',
         component: () => import('@/views/admin/UserManageView.vue'),
