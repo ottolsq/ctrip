@@ -43,7 +43,6 @@ public class RabbitMQConfig {
     // 订单状态
     public static final String ORDER_STATUS_QUEUE = "order.status.queue";
     public static final String ORDER_NOTIFICATION_QUEUE = "order.notification.queue";
-    public static final String INVENTORY_DEDUCTION_QUEUE = "inventory.deduction.queue";
 
     // 盲盒开盒
     public static final String BLINDBOX_RESULT_GEN_QUEUE = "blindbox.result.gen.queue";
@@ -143,11 +142,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue inventoryDeductionQueue() {
-        return QueueBuilder.durable(INVENTORY_DEDUCTION_QUEUE).build();
-    }
-
-    @Bean
     public Binding orderStatusBinding(Queue orderStatusQueue, TopicExchange orderStatusExchange) {
         return BindingBuilder.bind(orderStatusQueue).to(orderStatusExchange).with("#");
     }
@@ -155,11 +149,6 @@ public class RabbitMQConfig {
     @Bean
     public Binding orderNotificationBinding(Queue orderNotificationQueue, TopicExchange orderStatusExchange) {
         return BindingBuilder.bind(orderNotificationQueue).to(orderStatusExchange).with("#");
-    }
-
-    @Bean
-    public Binding inventoryDeductionBinding(Queue inventoryDeductionQueue, TopicExchange orderStatusExchange) {
-        return BindingBuilder.bind(inventoryDeductionQueue).to(orderStatusExchange).with("order.paid");
     }
 
     // ========== BlindBox Open Exchange & Queues ==========
