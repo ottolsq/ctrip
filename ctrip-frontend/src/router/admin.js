@@ -71,6 +71,16 @@ const adminRoutes = [
         }
       },
       {
+        path: 'banners',
+        name: 'AdminBannerManage',
+        component: () => import('@/views/admin/BannerManageView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '轮播图'
+        }
+      },
+      {
         path: 'users',
         name: 'AdminUserManage',
         component: () => import('@/views/admin/UserManageView.vue'),
