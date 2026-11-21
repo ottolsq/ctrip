@@ -137,7 +137,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**73/73 通过**。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**84/84 通过**。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -158,6 +158,22 @@ python -I ctrip-backend/scripts/e2e_p0.py
 5. 盲盒下单 → 模拟支付 → 异步开盒（RabbitMQ + AI 失败回退）→ 结果查询。
 
 脚本会创建新的测试用户与订单，可重复执行。
+
+### 7.3 管理端 P1.1 E2E
+
+需先执行 `ctrip_admin_seed.sql`，并重启后端加载 P1.1 代码：
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p11.py
+```
+
+覆盖：
+
+1. 管理员登录与用户列表；
+2. 注册普通用户 → 关键词检索 → 用户详情；
+3. 封禁 → 旧 access token 立即 401；
+4. 解封 → 恢复原状态并重新登录；
+5. 内容运营访问 `/admin/users`、`/admin/blind-box/templates` → 403。
 
 ## 8. 安全说明
 
