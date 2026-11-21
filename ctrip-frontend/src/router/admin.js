@@ -51,6 +51,16 @@ const adminRoutes = [
         }
       },
       {
+        path: 'blind-box/templates',
+        name: 'AdminBlindBoxTemplate',
+        component: () => import('@/views/admin/BlindBoxTemplateView.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['ADMIN'],
+          title: '盲盒模板'
+        }
+      },
+      {
         path: 'users',
         name: 'AdminUserManage',
         component: () => import('@/views/admin/UserManageView.vue'),

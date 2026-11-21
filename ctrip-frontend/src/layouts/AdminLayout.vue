@@ -30,6 +30,10 @@
           <el-icon><DataLine /></el-icon>
           <span>内容数据</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.isAdmin" index="/admin/blind-box/templates">
+          <el-icon><Box /></el-icon>
+          <span>盲盒模板</span>
+        </el-menu-item>
         <el-menu-item v-if="userStore.isAdmin" index="/admin/users">
           <el-icon><User /></el-icon>
           <span>用户管理</span>
