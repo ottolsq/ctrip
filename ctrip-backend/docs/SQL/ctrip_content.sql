@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS `attractions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='景点';
 
 -- 攻略表
+-- P1 审核字段 reject_reason / reviewed_by / reviewed_at 由 ctrip_admin.sql 迁移脚本添加。
 CREATE TABLE IF NOT EXISTS `guides` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT,
     `author_id`       BIGINT       NOT NULL COMMENT '作者用户 ID',

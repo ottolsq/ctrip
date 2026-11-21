@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `blind_box_template` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='盲盒模板表';
 
 -- 2. 盲盒订单表
+-- P1 退款字段 refund_reason / refunded_at 由 ctrip_admin.sql 迁移脚本添加。
 CREATE TABLE IF NOT EXISTS `blind_box_order` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
     `user_id` BIGINT NOT NULL COMMENT '用户ID（FK → users）',

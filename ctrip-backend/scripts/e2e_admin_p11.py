@@ -79,6 +79,9 @@ def main():
     assert detail["guideCount"] == 0 and detail["orderCount"] == 0, detail
 
     call("POST", f"/admin/users/{user_id}/ban", token=admin_token)
+    banned_detail, _ = call("GET", f"/admin/users/{user_id}", token=admin_token)
+    assert banned_detail["status"] == "SUSPENDED", banned_detail
+    assert banned_detail["statusBeforeSuspend"] == "UNVERIFIED", banned_detail
     _, payload = call("GET", "/users/me", token=user_token, expect=401)
     assert "已被封禁" in (payload.get("error") or ""), payload
 
@@ -88,11 +91,14 @@ def main():
     })
     me, _ = call("GET", "/users/me", token=relogin["accessToken"])
     assert me["role"] == "USER", me
+    assert me["status"] == "UNVERIFIED", me
 
     operator_token_data, _ = call("POST", "/auth/login", {
         "credential": "operator@example.com", "password": "Operator12345"
     })
     operator_token = operator_token_data["accessToken"]
+    operator_me, _ = call("GET", "/users/me", token=operator_token)
+    assert operator_me["role"] == "CONTENT_OPERATOR", operator_me
     call("GET", "/admin/users", token=operator_token, expect=403)
     call("GET", "/admin/blind-box/templates", token=operator_token, expect=403)
 

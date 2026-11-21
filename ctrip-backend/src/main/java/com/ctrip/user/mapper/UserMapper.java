@@ -12,7 +12,8 @@ import org.apache.ibatis.annotations.Mapper;
  *   <li>{@code selectById(id)} — 按主键查询
  *   <li>{@code selectOne(wrapper)} — 按条件查询单条（如按 email/phone 查询）
  *   <li>{@code insert(user)} — 插入
- *   <li>{@code updateById(user)} — 按主键更新（仅更新非 null 字段）
+ *   <li>{@code updateById(user)} — 按主键更新（默认仅更新非 null 字段；
+ *       {@code User.statusBeforeSuspend} 使用 ALWAYS 策略，以支持解封时写回 NULL）
  *   <li>{@code deleteById(id)} — 按主键删除
  * </ul>
  *

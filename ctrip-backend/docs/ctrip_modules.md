@@ -266,7 +266,7 @@
 
 | 表名 | 说明 | 核心字段 |
 |------|------|---------|
-| `users` | 用户主表 | id, username, email, phone, password_hash(BCrypt), avatar_url, gender, birthday, real_name, status(UNVERIFIED/ACTIVE/SUSPENDED/DELETED), role(USER/ADMIN/CONTENT_OPERATOR), email_verified, phone_verified, last_login_at, created_at, updated_at |
+| `users` | 用户主表 | id, username, email, phone, password_hash(BCrypt), avatar_url, gender, birthday, real_name, status(UNVERIFIED/ACTIVE/SUSPENDED/DELETED), status_before_suspend, role(USER/ADMIN/CONTENT_OPERATOR), email_verified, phone_verified, last_login_at, created_at, updated_at |
 | `refresh_tokens` | 刷新令牌表（Token轮换） | id, user_id(FK→CASCADE), token_hash(SHA-256), device_info, issued_at, expires_at, revoked, revoked_at |
 | `password_reset_tokens` | 密码重置OTP表 | id, user_id(FK→CASCADE), token_hash(SHA-256), channel(EMAIL/SMS), expires_at, used |
 

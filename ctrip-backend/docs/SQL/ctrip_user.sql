@@ -1,3 +1,4 @@
+-- P1 后台管理新增列 status_before_suspend 由 ctrip_admin.sql 迁移脚本添加。
 CREATE TABLE users (
     id              BIGINT          NOT NULL AUTO_INCREMENT,
     username        VARCHAR(50)     NOT NULL,

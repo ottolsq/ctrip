@@ -146,10 +146,11 @@ class AdminUserServiceImplTest {
     @Test
     @DisplayName("封禁自己：拒绝")
     void banUser_self_shouldThrow() {
-        when(userMapper.selectById(2L)).thenReturn(user(2L, UserRole.ADMIN, UserStatus.ACTIVE));
+        when(userMapper.selectById(2L)).thenReturn(user(2L, UserRole.USER, UserStatus.ACTIVE));
 
         assertThatThrownBy(() -> adminUserService.banUser(2L, 2L))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能封禁自己");
         verify(userMapper, never()).updateById(any(User.class));
     }
 
@@ -190,6 +191,20 @@ class AdminUserServiceImplTest {
         assertThat(captor.getValue().getStatus()).isEqualTo(UserStatus.UNVERIFIED);
         assertThat(captor.getValue().getStatusBeforeSuspend()).isNull();
         verify(stringRedisTemplate).delete(UserBanKeys.key(2L));
+    }
+
+    @Test
+    @DisplayName("解封且无历史状态：恢复为 ACTIVE")
+    void unbanUser_withoutPreviousStatus_shouldRestoreActive() {
+        User target = user(2L, UserRole.USER, UserStatus.SUSPENDED);
+        when(userMapper.selectById(2L)).thenReturn(target);
+
+        adminUserService.unbanUser(2L);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(captor.getValue().getStatusBeforeSuspend()).isNull();
     }
 
     @Test

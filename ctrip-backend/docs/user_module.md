@@ -240,6 +240,7 @@
 | birthday | LocalDate | 生日 |
 | realName | String | 实名认证姓名 |
 | status | UserStatus | 用户状态（见下方） |
+| statusBeforeSuspend | UserStatus | 封禁前状态；解封时恢复，非封禁状态为 null |
 | role | UserRole | 用户角色（见下方） |
 | emailVerified | Boolean | 邮箱是否验证 |
 | phoneVerified | Boolean | 手机是否验证 |
