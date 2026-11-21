@@ -1,14 +1,12 @@
 import { useUserStore } from '@/stores/user'
+import { adminHomePath } from '@/utils/businessRules'
 
 const adminRoutes = [
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
     // 内容运营无权访问数据概览，落到其可用的攻略审核页
-    redirect: () => {
-      const userStore = useUserStore()
-      return userStore.isAdmin ? '/admin/dashboard' : '/admin/guides'
-    },
+    redirect: () => adminHomePath(useUserStore().isAdmin),
     meta: {
       adminLayout: true,
       requiresAuth: true,

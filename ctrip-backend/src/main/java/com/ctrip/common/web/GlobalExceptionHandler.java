@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
  * DuplicateResourceException   → 409 Conflict      (唯一性冲突，如邮箱已注册)
  * BusinessException            → 400 Bad Request   (业务规则违反)
  * MethodArgumentNotValidException → 400 Bad Request (Bean Validation 失败)
+ * MethodArgumentTypeMismatchException → 400 Bad Request (查询/路径参数类型错误)
+ * HttpMessageNotReadableException → 400 Bad Request (请求体无法解析)
  * Exception (兜底)              → 500 Internal Server Error
  * </pre>
  */

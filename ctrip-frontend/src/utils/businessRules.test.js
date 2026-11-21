@@ -1,11 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  adminHomePath,
   canBanUser,
   parseRuleConfig,
   ruleDescription,
   mergeRuleConfig
 } from './businessRules.js'
+
+test('adminHomePath：管理员进概览，运营进攻略审核', () => {
+  assert.equal(adminHomePath(true), '/admin/dashboard')
+  assert.equal(adminHomePath(false), '/admin/guides')
+})
 
 test('canBanUser：仅允许封禁正常普通用户', () => {
   assert.equal(canBanUser({ id: 2, role: 'USER', status: 'ACTIVE' }, 1), true)

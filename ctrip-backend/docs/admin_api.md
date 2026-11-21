@@ -133,7 +133,7 @@
 
 `POST /api/v1/admin/guides/{id}/approve`
 
-- 仅 `PENDING` 可操作；
+- 仅 `PENDING` 可操作；使用 `WHERE status=PENDING` 条件更新，并发下后到者返回 **400**；
 - 状态改为 `PUBLISHED`，记录审核人与时间，清空驳回理由；
 - 加入布隆过滤器并清理攻略缓存；
 - 事务提交后发送 `GUIDE_APPROVED`。
@@ -149,6 +149,7 @@
 ```
 
 - `reason` 必填，最长 500；
+- 仅 `PENDING` 可驳回；条件更新 0 行（并发）返回 **400**；
 - 状态改为 `REJECTED`，写入理由/审核人/时间；
 - 清理攻略缓存；事务提交后发送 `GUIDE_REJECTED`。
 
@@ -197,7 +198,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | page | int | 否 | 页码，默认 1 |
-| limit | int | 否 | 每页条数，默认 20 |
+| limit | int | 否 | 每页条数，默认 20，最大 100 |
 | type | string | 否 | `DAILY` / `LIMITED` |
 | status | string | 否 | `ACTIVE` / `INACTIVE` |
 | keyword | string | 否 | 名称模糊匹配 |

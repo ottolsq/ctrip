@@ -2,6 +2,10 @@
  * 前端可测试的业务规则纯函数。
  */
 
+export function adminHomePath(isAdmin) {
+  return isAdmin ? '/admin/dashboard' : '/admin/guides'
+}
+
 export function canBanUser(row, currentUserId) {
   if (!row) return false
   return row.role !== 'ADMIN'
