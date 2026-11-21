@@ -276,10 +276,27 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 return OrderConverter.toResponse(refreshed, template);
             }
 
-            // 首次请求：状态 PAID → PROCESSING
-            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+            // 锁内可能已被退款/取消：不得覆盖为非 PAID 状态
+            if (refreshed.getStatus() != OrderStatus.PAID) {
+                throw new BusinessException("订单状态不支持开盒：status=" + refreshed.getStatus());
+            }
+
+            // 条件更新：仅 PAID → PROCESSING，避免与退款并发时覆盖 REFUNDED
+            int updated = orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
                     .eq(BlindBoxOrder::getId, order.getId())
+                    .eq(BlindBoxOrder::getStatus, OrderStatus.PAID)
                     .set(BlindBoxOrder::getStatus, OrderStatus.PROCESSING));
+            if (updated == 0) {
+                BlindBoxOrder latest = orderMapper.selectById(order.getId());
+                if (latest != null
+                        && (latest.getStatus() == OrderStatus.OPENED
+                            || latest.getStatus() == OrderStatus.PROCESSING)) {
+                    BlindBoxTemplate template = templateMapper.selectById(latest.getTemplateId());
+                    return OrderConverter.toResponse(latest, template);
+                }
+                throw new BusinessException("订单状态已变化，无法开盒：status="
+                        + (latest != null ? latest.getStatus() : "null"));
+            }
 
             // 事务提交后再发 MQ：避免消费者早于 PROCESSING 状态落库而跳过事件
             publishOpenEventAfterCommit(order, userId);

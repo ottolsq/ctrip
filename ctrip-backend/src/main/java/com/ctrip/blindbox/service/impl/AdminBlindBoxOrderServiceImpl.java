@@ -9,6 +9,7 @@ import com.ctrip.blindbox.dto.AdminOrderResponse;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxResult;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
+import com.ctrip.blindbox.entity.enums.BlindBoxType;
 import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
@@ -20,6 +21,8 @@ import com.ctrip.common.tx.AfterCommitExecutor;
 import com.ctrip.messaging.publisher.EventPublisher;
 import com.ctrip.user.entity.User;
 import com.ctrip.user.mapper.UserMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +41,7 @@ import java.util.stream.Collectors;
 @Service
 public class AdminBlindBoxOrderServiceImpl implements AdminBlindBoxOrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminBlindBoxOrderServiceImpl.class);
     private static final int MAX_PAGE_SIZE = 100;
 
     private final BlindBoxOrderMapper orderMapper;
@@ -137,10 +141,24 @@ public class AdminBlindBoxOrderServiceImpl implements AdminBlindBoxOrderService 
             throw new BusinessException("订单状态已变化，退款失败");
         }
 
-        AfterCommitExecutor.run(() -> eventPublisher.publishOrderStatusEvent(
-                "ORDER_REFUNDED", order.getId(), order.getOrderNo(), order.getUserId(),
-                order.getTemplateId(), order.getPayAmount(), order.getPayMethod(),
-                Map.of("reason", reason, "operatorId", String.valueOf(operatorId))));
+        // 库存与退款同事务恢复：不依赖 MQ 可用性，避免事件丢失导致永久少库存
+        BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
+        if (template != null && template.getType() == BlindBoxType.LIMITED) {
+            templateMapper.incrementStock(template.getId());
+        }
+
+        AfterCommitExecutor.run(() -> {
+            try {
+                eventPublisher.publishOrderStatusEvent(
+                        "ORDER_REFUNDED", order.getId(), order.getOrderNo(), order.getUserId(),
+                        order.getTemplateId(), order.getPayAmount(), order.getPayMethod(),
+                        Map.of("reason", reason, "operatorId", String.valueOf(operatorId)));
+            } catch (RuntimeException e) {
+                // 退款与库存已提交，事件仅用于下游通知/统计；不能让接口误报失败
+                log.error("退款事件发布失败: orderNo={}, templateId={}",
+                        order.getOrderNo(), order.getTemplateId(), e);
+            }
+        });
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.ctrip.blindbox.messaging;
 
-import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.config.RabbitMQConfig;
 import com.ctrip.messaging.event.OrderStatusEvent;
 import org.redisson.api.RedissonClient;
@@ -18,7 +17,7 @@ import java.time.Duration;
  * <ul>
  *   <li>ORDER_PAID：记录支付事件日志，一致性校验</li>
  *   <li>ORDER_CANCELLED：记录取消事件</li>
- *   <li>ORDER_REFUNDED：恢复限定盲盒模板库存</li>
+ *   <li>ORDER_REFUNDED：记录退款事件（库存已在退款事务内恢复）</li>
  * </ul>
  *
  * <p>通过 Redis SETNX 实现 eventId 幂等检查，防止重复消费。
@@ -30,11 +29,9 @@ public class OrderStatusConsumer {
     private static final String IDEMPOTENT_KEY_PREFIX = "mq:idempotent:order:";
     private static final Duration IDEMPOTENT_TTL = Duration.ofDays(7);
 
-    private final BlindBoxTemplateMapper templateMapper;
     private final RedissonClient redissonClient;
 
-    public OrderStatusConsumer(BlindBoxTemplateMapper templateMapper, RedissonClient redissonClient) {
-        this.templateMapper = templateMapper;
+    public OrderStatusConsumer(RedissonClient redissonClient) {
         this.redissonClient = redissonClient;
     }
 
@@ -90,10 +87,9 @@ public class OrderStatusConsumer {
      * 处理订单退款事件。
      */
     private void handleOrderRefunded(OrderStatusEvent event) {
-        log.info("订单已退款: orderNo={}, userId={}", event.orderNo(), event.userId());
-        // 限定盲盒恢复库存
-        templateMapper.incrementStock(event.templateId());
-        log.info("退款恢复库存: templateId={}", event.templateId());
+        // 库存已由 AdminBlindBoxOrderService 在同一退款事务内恢复，这里只做事件记录
+        log.info("订单已退款: orderNo={}, userId={}, templateId={}",
+                event.orderNo(), event.userId(), event.templateId());
     }
 
     /**

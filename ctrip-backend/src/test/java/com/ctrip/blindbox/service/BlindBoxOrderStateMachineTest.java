@@ -249,6 +249,41 @@ class BlindBoxOrderStateMachineTest {
             verify(eventPublisher, never()).publishBlindBoxOpenEvent(
                     anyString(), anyLong(), anyLong(), any(), any());
         }
+
+        @Test
+        @DisplayName("openBox：锁内重查已退款 → 拒绝且不更新状态/不发事件")
+        void openBox_refundedInsideLock_shouldThrow() throws InterruptedException {
+            BlindBoxOrder order = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PAID);
+            BlindBoxOrder refreshedOrder = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.REFUNDED);
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(order);
+            mockLockAcquired();
+            when(orderMapper.selectById(ORDER_ID)).thenReturn(refreshedOrder);
+
+            assertThatThrownBy(() -> service.openBox(USER_ID, ORDER_NO))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(orderMapper, never()).update(any(), any());
+            verify(eventPublisher, never()).publishBlindBoxOpenEvent(
+                    anyString(), anyLong(), anyLong(), any(), any());
+        }
+
+        @Test
+        @DisplayName("openBox：条件更新 0 行且状态变为已退款 → 拒绝且不发事件")
+        void openBox_conditionalUpdateZeroRowsRefunded_shouldThrow() throws InterruptedException {
+            BlindBoxOrder order = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PAID);
+            BlindBoxOrder refreshedOrder = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PAID);
+            BlindBoxOrder latest = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.REFUNDED);
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(order);
+            mockLockAcquired();
+            when(orderMapper.selectById(ORDER_ID)).thenReturn(refreshedOrder, latest);
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+            assertThatThrownBy(() -> service.openBox(USER_ID, ORDER_NO))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(eventPublisher, never()).publishBlindBoxOpenEvent(
+                    anyString(), anyLong(), anyLong(), any(), any());
+        }
     }
 
     // ========================================================================

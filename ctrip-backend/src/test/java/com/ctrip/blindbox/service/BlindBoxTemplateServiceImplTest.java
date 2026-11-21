@@ -1,6 +1,7 @@
 package com.ctrip.blindbox.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
@@ -27,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -109,18 +111,79 @@ class BlindBoxTemplateServiceImplTest {
     void updateSoldOutTemplateName_shouldSucceed() {
         BlindBoxTemplate existing = template(BlindBoxType.LIMITED, 0, validRule());
         existing.setId(1L);
-        when(templateMapper.selectById(1L)).thenReturn(existing);
+        BlindBoxTemplate refreshed = template(BlindBoxType.LIMITED, 0, validRule());
+        refreshed.setId(1L);
+        refreshed.setName("新名称");
+        refreshed.setStatus(TemplateStatus.INACTIVE);
+        when(templateMapper.selectById(1L)).thenReturn(existing, refreshed);
+        when(templateMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         BlindBoxTemplate updates = BlindBoxTemplate.builder()
                 .name("新名称")
                 .status(TemplateStatus.INACTIVE)
                 .build();
-        templateService.updateTemplate(1L, updates);
+        var response = templateService.updateTemplate(1L, updates);
 
-        ArgumentCaptor<BlindBoxTemplate> captor = ArgumentCaptor.forClass(BlindBoxTemplate.class);
-        verify(templateMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getName()).isEqualTo("新名称");
-        assertThat(captor.getValue().getStock()).isZero();
+        assertThat(response.name()).isEqualTo("新名称");
+        assertThat(response.stock()).isZero();
+
+        ArgumentCaptor<LambdaUpdateWrapper<BlindBoxTemplate>> captor =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(templateMapper).update(isNull(), captor.capture());
+        String sqlSet = captor.getValue().getSqlSet();
+        assertThat(sqlSet).contains("name", "status").doesNotContain("stock");
+        assertThat(captor.getValue().getParamNameValuePairs().values())
+                .contains("新名称", TemplateStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("日常模板编辑：前端传 stock=-1 不报错且仍为不限量")
+    void updateDailyWithMinusOneStock_shouldSucceed() {
+        BlindBoxTemplate existing = template(BlindBoxType.DAILY, -1, null);
+        existing.setId(2L);
+        BlindBoxTemplate refreshed = template(BlindBoxType.DAILY, -1, null);
+        refreshed.setId(2L);
+        refreshed.setName("新日常名称");
+        refreshed.setStatus(TemplateStatus.INACTIVE);
+        when(templateMapper.selectById(2L)).thenReturn(existing, refreshed);
+        when(templateMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        BlindBoxTemplate updates = BlindBoxTemplate.builder()
+                .name("新日常名称")
+                .type(BlindBoxType.DAILY)
+                .price(new BigDecimal("88.00"))
+                .stock(-1)
+                .status(TemplateStatus.INACTIVE)
+                .build();
+        var response = templateService.updateTemplate(2L, updates);
+
+        assertThat(response.name()).isEqualTo("新日常名称");
+        assertThat(response.stock()).isEqualTo(-1);
+        verify(templateMapper).update(isNull(), any(LambdaUpdateWrapper.class));
+    }
+
+    @Test
+    @DisplayName("编辑名称不写回库存：仅提交字段参与 UPDATE")
+    void updateName_shouldNotOverwriteConcurrentStock() {
+        BlindBoxTemplate existing = template(BlindBoxType.LIMITED, 5, validRule());
+        existing.setId(3L);
+        BlindBoxTemplate refreshed = template(BlindBoxType.LIMITED, 4, validRule());
+        refreshed.setId(3L);
+        refreshed.setName("并发后的新名称");
+        when(templateMapper.selectById(3L)).thenReturn(existing, refreshed);
+        when(templateMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        BlindBoxTemplate updates = BlindBoxTemplate.builder()
+                .name("并发后的新名称")
+                .build();
+        var response = templateService.updateTemplate(3L, updates);
+
+        assertThat(response.stock()).isEqualTo(4);
+
+        ArgumentCaptor<LambdaUpdateWrapper<BlindBoxTemplate>> captor =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(templateMapper).update(isNull(), captor.capture());
+        assertThat(captor.getValue().getSqlSet()).doesNotContain("stock");
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.ctrip.common.response.ApiResponse;
 import com.ctrip.user.security.JwtAuthenticationFilter;
 import com.ctrip.user.service.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import org.springframework.context.annotation.Bean;
@@ -134,6 +135,8 @@ public class SecurityConfig {
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
+        // 输出 ISO 8601 字符串，避免 LocalDateTime 被序列化为 [2026,11,21,...]
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return mapper;
     }
 

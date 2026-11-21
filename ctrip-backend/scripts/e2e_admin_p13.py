@@ -132,9 +132,24 @@ def main():
     _, user_token, username = register("bbx")
     suffix = username[-6:]
 
+    operator_token = login("operator@example.com", "Operator12345")
+    call("GET", "/admin/blind-box/templates", token=operator_token, expect=403)
+    call("GET", "/admin/blind-box/orders", token=operator_token, expect=403)
+
     daily = create_template(
         admin_token, f"E2E日常盲盒{suffix}", "DAILY", 999)
     assert daily["stock"] == -1, daily
+    assert isinstance(daily["createdAt"], str), daily["createdAt"]
+
+    # 模拟前端编辑 DAILY：payload 仍带 stock=-1，不得报 400
+    daily_updated, _ = call("PUT", f"/admin/blind-box/templates/{daily['id']}", {
+        "name": f"E2E日常盲盒{suffix}改名",
+        "type": "DAILY",
+        "price": 66.00,
+        "stock": -1,
+        "status": "ACTIVE"
+    }, token=admin_token)
+    assert daily_updated["stock"] == -1, daily_updated
 
     limited = create_template(
         admin_token, f"E2E限定盲盒{suffix}", "LIMITED", 5,
@@ -162,6 +177,12 @@ def main():
     order_no = order["orderNo"]
     assert get_template(limited_id)["stock"] == 4
 
+    # 编辑库存未变化时只提交名称，不得用陈旧库存覆盖并发扣减
+    limited_updated, _ = call("PUT", f"/admin/blind-box/templates/{limited_id}", {
+        "name": f"E2E限定盲盒{suffix}改名"
+    }, token=admin_token)
+    assert limited_updated["stock"] == 4, limited_updated
+
     expired = create_template(
         admin_token, f"E2E过期盲盒{suffix}", "LIMITED", 2,
         rule=rule_config(-3, -2))
@@ -172,13 +193,25 @@ def main():
     }, token=user_token, expect=400)
     assert get_template(expired["id"])["stock"] == 2
 
+    future = create_template(
+        admin_token, f"E2E未开始盲盒{suffix}", "LIMITED", 1,
+        rule=rule_config(2, 3))
+    call("POST", "/blind-box/orders", {
+        "templateId": future["id"],
+        "departureCity": "杭州",
+        "budgetLevel": "STANDARD"
+    }, token=user_token, expect=400)
+    assert get_template(future["id"])["stock"] == 1
+
     call("POST", "/payments/blind-box/callback",
          {"orderNo": order_no, "payMethod": "ALIPAY"})
 
     orders, _ = call(
         "GET", f"/admin/blind-box/orders?page=1&size=10&orderNo={order_no}",
         token=admin_token)
-    assert any(item["orderNo"] == order_no for item in orders["records"]), orders
+    listed = next(item for item in orders["records"] if item["orderNo"] == order_no)
+    assert listed["userName"] and listed["templateName"], listed
+    assert isinstance(listed["createdAt"], str), listed["createdAt"]
 
     detail, _ = call("GET", f"/admin/blind-box/orders/{order_no}", token=admin_token)
     assert detail["order"]["status"] == "PAID", detail
@@ -186,6 +219,16 @@ def main():
 
     call("POST", f"/admin/blind-box/orders/{order_no}/retry-open",
          token=admin_token, expect=400)
+
+    # 开盒后按 OPENED 退款，详情保留结果
+    call("POST", f"/blind-box/orders/{order_no}/open", token=user_token)
+    opened = None
+    for _ in range(45):
+        time.sleep(2)
+        opened, _ = call("GET", f"/blind-box/orders/{order_no}", token=user_token)
+        if opened["status"] == "OPENED":
+            break
+    assert opened and opened["status"] == "OPENED", opened
 
     reason = "E2E 退款规定原因"
     call("POST", f"/admin/blind-box/orders/{order_no}/refund",
@@ -195,6 +238,7 @@ def main():
     assert detail["order"]["status"] == "REFUNDED", detail
     assert detail["order"]["refundReason"] == reason, detail
     assert detail["order"]["refundedAt"], detail
+    assert detail["result"] is not None and detail["result"]["destination"], detail
 
     wait_stock(limited_id, 5)
     call("POST", f"/admin/blind-box/orders/{order_no}/refund",

@@ -1,6 +1,7 @@
 package com.ctrip.blindbox.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.converter.TemplateConverter;
 import com.ctrip.blindbox.dto.TemplateResponse;
@@ -114,55 +115,78 @@ public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
     }
 
     /**
-     * 更新模板（后台管理）。
+     * 更新模板（后台管理）：仅提交字段参与 UPDATE，避免写回陈旧库存。
      */
     @Override
     @Transactional
     public TemplateResponse updateTemplate(Long id, BlindBoxTemplate updates) {
         BlindBoxTemplate existing = requireTemplate(id);
+        BlindBoxType targetType = updates.getType() != null ? updates.getType() : existing.getType();
 
-        if (updates.getName() != null) {
-            if (updates.getName().isBlank()) {
-                throw new BusinessException("盲盒名称不能为空");
-            }
-            existing.setName(updates.getName());
+        if (updates.getName() != null && updates.getName().isBlank()) {
+            throw new BusinessException("盲盒名称不能为空");
         }
-        if (updates.getType() != null) {
-            existing.setType(updates.getType());
+        if (updates.getPrice() != null && updates.getPrice().signum() <= 0) {
+            throw new BusinessException("价格必须大于 0");
         }
-        if (updates.getPrice() != null) {
-            if (updates.getPrice().signum() <= 0) {
-                throw new BusinessException("价格必须大于 0");
-            }
-            existing.setPrice(updates.getPrice());
-        }
-        if (updates.getStock() != null) {
-            if (updates.getStock() < 0) {
-                throw new BusinessException("库存不能为负数");
-            }
-            existing.setStock(updates.getStock());
-        }
-        if (updates.getRuleConfig() != null) {
-            existing.setRuleConfig(updates.getRuleConfig());
-        }
-        if (updates.getStatus() != null) {
-            existing.setStatus(updates.getStatus());
+        if (updates.getStock() != null
+                && targetType == BlindBoxType.LIMITED
+                && updates.getStock() < 0) {
+            throw new BusinessException("库存不能为负数");
         }
 
-        if (existing.getType() == BlindBoxType.DAILY) {
-            existing.setStock(-1);
-        } else {
-            if (existing.getStock() == null || existing.getStock() < 0) {
+        if (targetType == BlindBoxType.LIMITED) {
+            Integer effectiveStock = updates.getStock() != null ? updates.getStock() : existing.getStock();
+            if (effectiveStock == null || effectiveStock < 0) {
                 throw new BusinessException("限定盲盒库存不能为负数");
             }
             if (updates.getType() == BlindBoxType.LIMITED
                     || updates.getRuleConfig() != null) {
-                BlindBoxRuleConfigParser.parse(existing.getRuleConfig());
+                String effectiveRule = updates.getRuleConfig() != null
+                        ? updates.getRuleConfig()
+                        : existing.getRuleConfig();
+                BlindBoxRuleConfigParser.parse(effectiveRule);
             }
         }
 
-        templateMapper.updateById(existing);
-        return TemplateConverter.toResponse(existing);
+        LambdaUpdateWrapper<BlindBoxTemplate> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(BlindBoxTemplate::getId, id);
+        boolean hasUpdates = false;
+
+        if (updates.getName() != null) {
+            wrapper.set(BlindBoxTemplate::getName, updates.getName());
+            hasUpdates = true;
+        }
+        if (updates.getType() != null) {
+            wrapper.set(BlindBoxTemplate::getType, updates.getType());
+            hasUpdates = true;
+        }
+        if (updates.getPrice() != null) {
+            wrapper.set(BlindBoxTemplate::getPrice, updates.getPrice());
+            hasUpdates = true;
+        }
+        if (targetType == BlindBoxType.DAILY) {
+            // 日常盲盒无论提交何种库存都归一到 -1
+            wrapper.set(BlindBoxTemplate::getStock, -1);
+            hasUpdates = true;
+        } else if (updates.getStock() != null) {
+            wrapper.set(BlindBoxTemplate::getStock, updates.getStock());
+            hasUpdates = true;
+        }
+        if (updates.getRuleConfig() != null) {
+            wrapper.set(BlindBoxTemplate::getRuleConfig, updates.getRuleConfig());
+            hasUpdates = true;
+        }
+        if (updates.getStatus() != null) {
+            wrapper.set(BlindBoxTemplate::getStatus, updates.getStatus());
+            hasUpdates = true;
+        }
+
+        if (!hasUpdates) {
+            return TemplateConverter.toResponse(existing);
+        }
+        templateMapper.update(null, wrapper);
+        return TemplateConverter.toResponse(requireTemplate(id));
     }
 
     /**

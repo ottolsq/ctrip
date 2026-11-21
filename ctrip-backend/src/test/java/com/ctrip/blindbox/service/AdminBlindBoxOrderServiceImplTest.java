@@ -39,12 +39,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -168,11 +170,13 @@ class AdminBlindBoxOrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("退款：条件更新并提交后发布事件")
+    @DisplayName("退款：条件更新、同步恢复库存并提交后发布事件")
     void refund_paid_shouldSetRefundedAndPublishEventAfterCommit() {
         BlindBoxOrder order = order(OrderStatus.PAID);
         when(orderMapper.selectOne(any())).thenReturn(order);
         when(orderMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(templateMapper.selectById(2L)).thenReturn(BlindBoxTemplate.builder()
+                .id(2L).name("周末盲盒").type(BlindBoxType.LIMITED).stock(5).build());
 
         TransactionSynchronizationManager.initSynchronization();
         service.refund("BB202611210001", "用户申请退款", 99L);
@@ -197,6 +201,41 @@ class AdminBlindBoxOrderServiceImplTest {
                 .contains("用户申请退款", OrderStatus.REFUNDED)
                 .anyMatch(value -> value instanceof LocalDateTime);
         assertThat(wrapper.getSqlSegment()).contains("status", "id");
+        verify(templateMapper).incrementStock(2L);
+    }
+
+    @Test
+    @DisplayName("退款：日常盲盒不恢复库存")
+    void refund_dailyOrder_shouldNotRestoreStock() {
+        BlindBoxOrder order = order(OrderStatus.PAID);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        when(orderMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(templateMapper.selectById(2L)).thenReturn(BlindBoxTemplate.builder()
+                .id(2L).name("日常盲盒").type(BlindBoxType.DAILY).stock(-1).build());
+
+        service.refund("BB202611210001", "用户申请退款", 99L);
+
+        verify(templateMapper, never()).incrementStock(any());
+    }
+
+    @Test
+    @DisplayName("退款：事件发布失败不影响已提交退款与库存恢复")
+    void refund_eventPublishFailure_shouldNotThrowAndStockRestored() {
+        BlindBoxOrder order = order(OrderStatus.PAID);
+        when(orderMapper.selectOne(any())).thenReturn(order);
+        when(orderMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(templateMapper.selectById(2L)).thenReturn(BlindBoxTemplate.builder()
+                .id(2L).name("周末盲盒").type(BlindBoxType.LIMITED).stock(5).build());
+        doThrow(new RuntimeException("mq down")).when(eventPublisher).publishOrderStatusEvent(
+                anyString(), any(), anyString(), any(), any(), any(), anyString(), anyMap());
+
+        TransactionSynchronizationManager.initSynchronization();
+        assertThatCode(() -> {
+            service.refund("BB202611210001", "用户申请退款", 99L);
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+        }).doesNotThrowAnyException();
+        verify(templateMapper).incrementStock(2L);
     }
 
     @Test
