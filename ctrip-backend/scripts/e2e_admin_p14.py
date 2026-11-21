@@ -126,14 +126,25 @@ def main():
     _, user_token, username = register("ops")
     suffix = username[-6:]
 
+    # 普通用户同样不得访问管理端
+    call("GET", "/admin/banners", token=user_token, expect=403)
+    call("GET", "/admin/recommendations", token=user_token, expect=403)
+    call("GET", "/admin/dashboard", token=user_token, expect=403)
+
     current, _ = call("POST", "/admin/banners", banner_payload(
         f"E2E当前轮播{suffix}", local_dt(-1), local_dt(1)), token=admin_token, expect=201)
     future, _ = call("POST", "/admin/banners", banner_payload(
         f"E2E未来轮播{suffix}", local_dt(24), local_dt(48)), token=admin_token, expect=201)
 
-    ids = public_ids("/banners")
+    banner_list, _ = call("GET", "/banners")
+    assert isinstance(banner_list, list), banner_list
+    ids = {item["id"] for item in banner_list}
     assert current["id"] in ids, ids
     assert future["id"] not in ids, ids
+
+    # 未使用的 slot 必须返回空数组（首页隐藏推荐区的依据）
+    empty_recs, _ = call("GET", f"/recommendations?slot=p1_4_empty_{suffix}")
+    assert empty_recs == [], empty_recs
 
     call("PUT", f"/admin/banners/{current['id']}", banner_payload(
         f"E2E当前轮播{suffix}", local_dt(-1), local_dt(1), status="DISABLED"),

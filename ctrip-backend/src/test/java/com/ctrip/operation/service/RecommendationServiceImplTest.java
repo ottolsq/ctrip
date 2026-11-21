@@ -3,6 +3,7 @@ package com.ctrip.operation.service;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
+import com.ctrip.blindbox.entity.enums.TemplateStatus;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.content.entity.Destination;
@@ -158,6 +159,31 @@ class RecommendationServiceImplTest {
         assertThat(result.getFirst().targetTitle()).isEqualTo("杭州");
         assertThat(result.getFirst().coverUrl()).isEqualTo("https://img.example.com/hangzhou.jpg");
         assertThat(result.getFirst().linkUrl()).isEqualTo("/destinations/5");
+    }
+
+    @Test
+    @DisplayName("公开列表：已下架盲盒模板跳过")
+    void listActive_inactiveTemplate_shouldBeSkipped() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 21, 12, 0);
+        when(recommendationMapper.selectList(any())).thenReturn(List.of(
+                recommendation(9L, RecommendationTargetType.BLIND_BOX_TEMPLATE, 21L, 0,
+                        DisplayStatus.ENABLED, null, null)));
+        when(templateMapper.selectById(21L)).thenReturn(BlindBoxTemplate.builder()
+                .id(21L).name("已下架盲盒").status(TemplateStatus.INACTIVE).build());
+
+        assertThat(recommendationService.listActive("home_featured", now)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("公开列表：已删除攻略跳过")
+    void listActive_missingGuide_shouldBeSkipped() {
+        LocalDateTime now = LocalDateTime.of(2026, 11, 21, 12, 0);
+        when(recommendationMapper.selectList(any())).thenReturn(List.of(
+                recommendation(12L, RecommendationTargetType.GUIDE, 12L, 0,
+                        DisplayStatus.ENABLED, null, null)));
+        when(guideMapper.selectById(12L)).thenReturn(null);
+
+        assertThat(recommendationService.listActive("home_featured", now)).isEmpty();
     }
 
     @Test
