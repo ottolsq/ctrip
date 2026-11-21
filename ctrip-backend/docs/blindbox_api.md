@@ -1044,6 +1044,65 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 
 ---
 
+## 合规接口（P3）
+
+### 概率公示
+
+`GET /api/v1/blind-box/{id}/probabilities`（免登录）
+
+仅上架模板可查询。返回三档概率（归一化百分比，保留 2 位小数）、保底次数与概率版本：
+
+```json
+{
+  "success": true,
+  "data": {
+    "tiers": [
+      { "tier": "COMMON", "probability": 70.00, "destinations": ["杭州", "北京", "成都"] },
+      { "tier": "RARE", "probability": 25.00, "destinations": ["京都"] },
+      { "tier": "LEGENDARY", "probability": 5.00, "destinations": ["巴厘岛"] }
+    ],
+    "guaranteeCount": 10,
+    "probabilityVersion": "v1"
+  },
+  "error": null
+}
+```
+
+- 实际抽取使用同一权重配置，概率版本随抽取记录留痕；
+- 连续 `guaranteeCount` 次未中 `RARE`/`LEGENDARY`，下一次强制从稀有及以上档位按权重抽取。
+
+### 我的抽取记录
+
+`GET /api/v1/blind-box/draw-records?page&size`（需登录）
+
+```json
+{
+  "records": [
+    {
+      "id": 1,
+      "orderId": 100,
+      "orderNo": "BB202611210001",
+      "userId": 2,
+      "userName": "alice",
+      "templateId": 1,
+      "templateName": "周末盲盒",
+      "tier": "RARE",
+      "destinationId": 4,
+      "destination": "京都",
+      "guaranteed": false,
+      "probabilityVersion": "v1",
+      "createdAt": "2026-11-21T10:02:03"
+    }
+  ],
+  "total": 1,
+  "current": 1,
+  "size": 10,
+  "pages": 1
+}
+```
+
+> 每次开盒落一条记录，`order_id` 唯一；用户只能查询自己的记录。
+
 ## 后台管理接口
 
 > 以下接口均需在请求头中携带有效的 Access Token，且用户角色为 `ADMIN`。

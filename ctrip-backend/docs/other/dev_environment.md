@@ -139,7 +139,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**155/155 通过**（P2 新增全局 400、审核条件更新、模板分页/删除竞态测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**166/166 通过**（P3 新增概率/保底、AI 目的地、抽取记录测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -231,6 +231,24 @@ bash deploy/stop.sh
 ```
 
 完整结果见 `docs/other/p2_acceptance.md`，操作细节见 `deploy/DEPLOYMENT.md`。
+
+### 7.8 合规能力 P3 E2E
+
+先执行迁移（可重复执行）：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL/ctrip_p3_compliance.sql"
+```
+
+重启后端加载 P3 代码后执行：
+
+```bash
+python -I ctrip-backend/scripts/e2e_admin_p3.py
+```
+
+覆盖：概率公示 70/25/5 与合计 100、保底 10、开盒后用户抽取记录（档位/目的地/版本）、管理员按用户检索、普通用户访问管理员记录 403。
+
+> 注意：同一 RabbitMQ 队列只能有一个后端实例消费。执行 E2E 时不要同时运行 8080 与 8081 两个实例，否则开盒事件可能被旧实例消费。
 
 ## 8. 安全说明
 

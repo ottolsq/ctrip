@@ -301,7 +301,29 @@
 | 403 | 普通用户/内容运营访问模板或订单管理 |
 | 404 | 模板或订单不存在 |
 
-## 14. P1.3 E2E
+## 14. 盲盒抽取记录（P3，ADMIN）
+
+`GET /api/v1/admin/blind-box/draw-records?page&size&userId&templateId&tier&startDate&endDate`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认 1 |
+| size | int | 否 | 每页数量，默认 10，最大 100 |
+| userId | long | 否 | 用户 ID |
+| templateId | long | 否 | 模板 ID |
+| tier | string | 否 | `COMMON` / `RARE` / `LEGENDARY` |
+| startDate | date | 否 | 抽取日期起（`yyyy-MM-dd`） |
+| endDate | date | 否 | 抽取日期止（`yyyy-MM-dd`） |
+
+响应项：`id, orderId, orderNo, userId, userName, templateId, templateName, tier, destinationId, destination, guaranteed, probabilityVersion, createdAt`。
+
+记录与开盒结果同一事务写入，`order_id` 唯一；仅 `ADMIN` 可访问。
+
+### 概率配置说明
+
+概率与保底由 `application.properties` 的 `app.blindbox.prize.*` 配置，默认 `70/25/5`、保底 10 次、版本 `v1`。公开概率接口与实际抽取共用同一配置。
+
+## 15. P1.3 E2E
 
 ```bash
 python -I ctrip-backend/scripts/e2e_admin_p13.py
