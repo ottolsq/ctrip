@@ -132,7 +132,10 @@ com.ctrip.content/
 | destinationId | Long | 关联目的地 ID（FK→destination，可为 null） |
 | coverUrl | String | 封面图 URL |
 | imageUrls | String | 内容图集 JSON 数组 |
-| status | GuideStatus | 状态（DRAFT/PUBLISHED/REJECTED） |
+| status | GuideStatus | 状态（DRAFT/PENDING/PUBLISHED/REJECTED） |
+| rejectReason | String | 审核驳回理由 |
+| reviewedBy | Long | 审核人用户 ID |
+| reviewedAt | LocalDateTime | 审核时间 |
 | viewCount | Integer | 浏览量（默认 0） |
 | likeCount | Integer | 点赞数（默认 0） |
 | createdAt | LocalDateTime | 创建时间（自动填充） |
@@ -143,8 +146,9 @@ com.ctrip.content/
 | 状态 | 值 | 说明 |
 |------|-----|------|
 | DRAFT | 0 | 草稿，仅作者可见 |
-| PUBLISHED | 1 | 已发布，所有人可见 |
-| REJECTED | 2 | 审核拒绝 |
+| PUBLISHED | 1 | 已发布，登录用户可见 |
+| REJECTED | 2 | 审核驳回，附驳回理由 |
+| PENDING | 3 | 已提交，等待内容运营审核 |
 
 ---
 
@@ -251,10 +255,11 @@ com.ctrip.content/
 
 1. 从 @AuthenticationPrincipal 获取当前用户 ID（authorId）
 2. 校验请求参数（title 非空、content 非空等）
-3. 创建 Guide 实体，状态为 DRAFT 或 PUBLISHED
+3. 创建 Guide 实体，状态固定为 DRAFT（客户端不能指定状态）
 4. 设置 authorId、coverUrl、imageUrls
 5. 保存到数据库
-6. 返回 GuideResponse
+6. 作者调用 `POST /api/v1/guides/{id}/submit` 提交审核，状态变为 PENDING
+7. 返回 GuideResponse
 
 **关键代码位置：** `GuideController.createGuide()` → `GuideServiceImpl.createGuide()`
 
@@ -295,8 +300,11 @@ com.ctrip.content/
 **流程：**
 
 1. 根据 ID 查询攻略
-2. 校验权限：当前 userId 必须等于 authorId（或 ADMIN）
-3. PUT：更新 title/content/coverUrl/imageUrls/status 等字段
+2. 校验权限：当前 userId 必须等于 authorId
+3. PUT：更新 title/content/coverUrl/imageUrls 等字段（不再接受 status）
+   - DRAFT/REJECTED 编辑后保持 DRAFT 并清空审核字段；
+   - PUBLISHED 编辑有内容变化后转为 PENDING；
+   - PENDING 编辑返回 400。
 4. DELETE：执行删除操作
 
 **关键代码位置：** `GuideController.updateGuide()` / `GuideController.deleteGuide()`
@@ -437,18 +445,20 @@ public interface ImageStorageService {
 
 | 接口 | 认证 | 权限 |
 |------|------|------|
-| 目的地列表/详情 | 无需 | 公开 |
-| 景点列表/详情 | 无需 | 公开 |
-| 攻略列表/详情 | 无需 | 公开（仅 PUBLISHED） |
-| 攻略发布/编辑/删除 | 需要 JWT | 仅作者或 ADMIN |
+| 目的地列表/详情 | 需要 JWT | 登录用户 |
+| 景点列表/详情 | 需要 JWT | 登录用户 |
+| 攻略列表/详情 | 需要 JWT | 登录用户（列表/详情仅 PUBLISHED） |
+| 攻略发布/编辑/删除/提交 | 需要 JWT | 仅作者 |
+| 攻略 mine/manage | 需要 JWT | 仅作者（可读非公开状态） |
 | 评论发表/删除 | 需要 JWT | 仅评论作者或 ADMIN |
 | 点赞 | 需要 JWT | 已登录用户 |
 | 图片上传 | 需要 JWT | 已登录用户 |
-| 管理端 CRUD | 需要 JWT + ADMIN | 仅 ADMIN |
+| 内容运营/攻略/评论/内容数据 | 需要 JWT + ADMIN/CONTENT_OPERATOR | 两类角色 |
+| 用户管理/盲盒/订单/运营管理 | 需要 JWT + ADMIN | 仅 ADMIN |
 
 **权限检查实现：**
 - 攻略/评论的编辑/删除：Service 层校验 `userId == authorId`，不等则抛 `AuthenticationException`
-- 管理端接口：通过 Spring Security 配置 `/api/v1/admin/**` 需要 ADMIN 角色
+- 管理端接口：URL 基线允许 ADMIN/CONTENT_OPERATOR，具体端点用 `@PreAuthorize` 收紧
 
 ---
 

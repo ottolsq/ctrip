@@ -53,7 +53,7 @@
 |------|------|---------|
 | `destination` | 目的地 | id, name, country, province, description, best_season, cover_url, image_urls(JSON), created_at |
 | `attraction` | 景点 | id, destination_id(FK), name, description, location, ticket_price, cover_url, image_urls(JSON), created_at |
-| `guide` | 攻略内容 | id, author_id(FK→users), title, content, destination_id, cover_url, image_urls(JSON), status(DRAFT/PUBLISHED/REJECTED), view_count, like_count, created_at, updated_at |
+| `guide` | 攻略内容 | id, author_id(FK→users), title, content, destination_id, cover_url, image_urls(JSON), status(DRAFT/PENDING/PUBLISHED/REJECTED), reject_reason, reviewed_by, reviewed_at, view_count, like_count, created_at, updated_at |
 | `comment` | 评论 | id, guide_id(FK), user_id(FK), parent_id(自关联, 支持回复), content, like_count, created_at |
 | `collection` | 收藏 | id, user_id(FK), target_type(guide/destination/itinerary), target_id, created_at |
 

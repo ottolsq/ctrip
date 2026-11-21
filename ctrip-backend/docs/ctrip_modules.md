@@ -283,7 +283,7 @@
 |------|------|---------|
 | `destination` | 目的地信息 | id, name, country, province, description, best_season, cover_url, image_urls(JSON), created_at |
 | `attraction` | 景点信息 | id, destination_id(FK→destination), name, description, location(GIS), ticket_price, cover_url, image_urls(JSON), created_at |
-| `guide` | 攻略内容 | id, author_id(FK→users), title, content, destination_id, cover_url, image_urls(JSON), status(DRAFT/PUBLISHED/REJECTED), view_count, like_count, created_at, updated_at |
+| `guide` | 攻略内容 | id, author_id(FK→users), title, content, destination_id, cover_url, image_urls(JSON), status(DRAFT/PENDING/PUBLISHED/REJECTED), reject_reason, reviewed_by, reviewed_at, view_count, like_count, created_at, updated_at |
 
 **图片字段说明**：
 - `cover_url`：封面图 URL，用于列表卡片展示（单张）

@@ -81,7 +81,7 @@
 
 ### 认证方式
 
-- **公开接口**（`/api/v1/destinations/**`、`/api/v1/attractions/**`、`/api/v1/guides/**` 的 GET 请求、`/api/v1/guides/{guideId}/comments` 的 GET 请求）：无需认证
+- **登录用户接口**（`/api/v1/destinations/**`、`/api/v1/attractions/**`、`/api/v1/guides/**` 的 GET 请求、`/api/v1/guides/{guideId}/comments` 的 GET 请求）：需要 JWT；攻略列表/详情仅返回 PUBLISHED，mine/manage/submit 仅作者
 - **用户接口**（攻略发布/编辑/删除/点赞、评论发表/删除、图片上传）：必须在请求头中携带有效的 Access Token
 - **管理端接口**（`/api/v1/admin/**`）：需要 ADMIN 或 CONTENT_OPERATOR 角色
 
@@ -136,7 +136,7 @@ Authorization: Bearer <access_token>
 分页查询目的地列表，支持按国家、省份、关键词筛选。
 
 - **URL**: `GET /api/v1/destinations`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 请求参数
 
@@ -202,7 +202,7 @@ curl -X GET "http://localhost:8080/api/v1/destinations?page=1&limit=10&country=�
 获取单个目的地的详细信息，包含关联的景点列表。
 
 - **URL**: `GET /api/v1/destinations/{id}`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 路径参数
 
@@ -280,7 +280,7 @@ curl -X GET "http://localhost:8080/api/v1/destinations/1"
 分页查询景点列表，支持按目的地、关键词筛选。
 
 - **URL**: `GET /api/v1/attractions`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 请求参数
 
@@ -332,7 +332,7 @@ curl -X GET "http://localhost:8080/api/v1/attractions?page=1&limit=10&destinatio
 获取单个景点的详细信息。
 
 - **URL**: `GET /api/v1/attractions/{id}`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 路径参数
 
@@ -386,7 +386,7 @@ curl -X GET "http://localhost:8080/api/v1/attractions/101"
 分页查询已发布的攻略列表，支持按目的地、作者、关键词筛选和排序。
 
 - **URL**: `GET /api/v1/guides`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 请求参数
 
@@ -439,7 +439,7 @@ curl -X GET "http://localhost:8080/api/v1/guides?page=1&limit=10&sortBy=create_t
 获取攻略详细信息，包含完整正文内容。访问后浏览量自动 +1。
 
 - **URL**: `GET /api/v1/guides/{id}`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 路径参数
 
@@ -802,7 +802,7 @@ curl -X DELETE "http://localhost:8080/api/v1/guides/1/like" \
 查询指定攻略的评论列表，以树形结构返回（支持嵌套回复）。
 
 - **URL**: `GET /api/v1/guides/{guideId}/comments`
-- **认证**: 无需
+- **认证**: 需要 JWT（登录用户）
 
 #### 路径参数
 

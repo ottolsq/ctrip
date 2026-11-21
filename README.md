@@ -151,7 +151,7 @@ npm run dev
 - `SQL/`：MySQL 建表与示例数据脚本
 - `other/dev_environment.md`：WSL2 中间件版本、启动与联调说明
 - `other/`：详细方案设计、测试方案、项目亮点
-- `admin_api.md`：管理端用户管理接口（P1.1）
+- `admin_api.md`：管理端接口（P1.1 用户管理 + P1.2 内容审核/评论/内容数据）
 - `scripts/e2e_p0.py`：P0 用户端 API 级端到端验证脚本
 - `scripts/e2e_admin_p11.py`：P1.1 管理端 API 级端到端验证脚本
 - `scripts/e2e_admin_p12.py`：P1.2 内容运营 API 级端到端验证脚本
