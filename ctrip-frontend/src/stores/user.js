@@ -15,8 +15,15 @@ export const useUserStore = defineStore('user', () => {
   const userId = computed(() => userInfo.value?.id)
   const username = computed(() => userInfo.value?.username || '')
   const avatar = computed(() => userInfo.value?.avatarUrl || '')
-  const roles = computed(() => userInfo.value?.roles || [])
+  const roles = computed(() => {
+    const info = userInfo.value
+    if (!info) return []
+    if (Array.isArray(info.roles)) return info.roles
+    return info.role ? [info.role] : []
+  })
   const isAdmin = computed(() => roles.value.includes('ADMIN'))
+  const isContentOperator = computed(() => roles.value.includes('CONTENT_OPERATOR'))
+  const canAccessAdmin = computed(() => isAdmin.value || isContentOperator.value)
 
   // 设置 Token
   function setToken(newToken) {
@@ -100,6 +107,8 @@ export const useUserStore = defineStore('user', () => {
     avatar,
     roles,
     isAdmin,
+    isContentOperator,
+    canAccessAdmin,
     setToken,
     setRefreshToken,
     setUserInfo,

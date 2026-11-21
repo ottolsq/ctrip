@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { storage } from '@/utils/storage'
+import { useUserStore } from '@/stores/user'
+import adminRoutes from './admin'
 
 const routes = [
   // 公共页面
@@ -191,6 +193,8 @@ const routes = [
   }
 ]
 
+routes.push(...adminRoutes)
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
@@ -200,7 +204,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - 趣行旅行平台` : '趣行旅行平台'
 
@@ -209,12 +213,35 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !token) {
     // 需要登录但未登录，跳转到登录页
     next({ path: '/login', query: { redirect: to.fullPath } })
-  } else if (to.meta.guest && token) {
+    return
+  }
+
+  if (to.meta.guest && token) {
     // 已登录用户访问登录/注册页，跳转到首页
     next('/')
-  } else {
-    next()
+    return
   }
+
+  const requiredRoles = to.meta.roles
+  if (Array.isArray(requiredRoles) && requiredRoles.length > 0) {
+    const userStore = useUserStore()
+    if (!userStore.userInfo) {
+      try {
+        await userStore.fetchUserProfile()
+      } catch {
+        userStore.resetState()
+        next({ path: '/login', query: { redirect: to.fullPath } })
+        return
+      }
+    }
+    const allowed = requiredRoles.some(role => userStore.roles.includes(role))
+    if (!allowed) {
+      next('/403')
+      return
+    }
+  }
+
+  next()
 })
 
 export default router

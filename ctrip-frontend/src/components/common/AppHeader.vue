@@ -43,6 +43,9 @@
                 <!-- <el-dropdown-item command="collections">
                   <el-icon><Star /></el-icon>我的收藏
                 </el-dropdown-item> -->
+                <el-dropdown-item v-if="userStore.canAccessAdmin" divided command="admin">
+                  <el-icon><Setting /></el-icon>后台管理
+                </el-dropdown-item>
                 <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>退出登录
                 </el-dropdown-item>
@@ -81,6 +84,9 @@ const handleCommand = async (command) => {
       break
     case 'guides':
       router.push('/user/guides')
+      break
+    case 'admin':
+      router.push('/admin')
       break
     case 'collections':
       router.push('/user/collections')
