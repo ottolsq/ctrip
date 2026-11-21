@@ -126,7 +126,7 @@
               <span>内容预览</span>
             </div>
             <div class="content-preview">
-              <div class="preview-content" v-html="formatPreviewContent(form.content)"></div>
+              <div class="preview-content" v-html="sanitizeHtml(formatPreviewContent(form.content))"></div>
             </div>
           </div>
 
@@ -168,6 +168,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getManageGuide, createGuide, updateGuide, submitGuide } from '@/api/guide'
 import { getDestinations } from '@/api/destination'
 import { uploadImage } from '@/api/upload'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Document, Location, Picture, RefreshRight, Tickets, View, Search, Check } from '@element-plus/icons-vue'
 import '@wangeditor/editor/dist/css/style.css'
@@ -367,10 +368,10 @@ async function handleSubmitReview() {
 }
 
 function handleCancel() {
-  if (isEdit.value) {
+  if (isEdit.value && currentStatus.value === 'PUBLISHED') {
     router.push(`/guides/${route.params.id}`)
   } else {
-    router.push('/guides')
+    router.push('/user/guides')
   }
 }
 

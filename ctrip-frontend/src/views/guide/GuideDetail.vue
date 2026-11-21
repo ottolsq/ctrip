@@ -24,7 +24,7 @@
 
       <!-- 攻略内容 -->
       <el-card class="content-card" shadow="never">
-        <div class="guide-content" v-html="guide.content || '<p>暂无内容</p>'"></div>
+        <div class="guide-content" v-html="sanitizeHtml(guide.content || '<p>暂无内容</p>')"></div>
       </el-card>
 
       <!-- 操作栏 -->
@@ -146,6 +146,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { getGuide, deleteGuide, likeGuide, unlikeGuide } from '@/api/guide'
 import { collectGuide, uncollectGuide, getCollectionStatus } from '@/api/collection'
 import { getComments, createComment, deleteComment } from '@/api/comment'

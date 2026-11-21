@@ -131,7 +131,7 @@
           show-icon
           class="preview-alert"
         />
-        <div class="preview-content" v-html="previewGuide.content"></div>
+        <div class="preview-content" v-html="sanitizeHtml(previewGuide.content)"></div>
       </template>
     </el-dialog>
   </div>
@@ -144,6 +144,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Picture, Location, Clock, View, Star } from '@element-plus/icons-vue'
 import UserSidebar from '@/components/common/UserSidebar.vue'
 import { getMyGuides, getManageGuide, submitGuide, deleteGuide } from '@/api/guide'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const router = useRouter()
 

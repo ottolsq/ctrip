@@ -99,7 +99,7 @@
           show-icon
           class="detail-alert"
         />
-        <div class="detail-content" v-html="detail.content"></div>
+        <div class="detail-content" v-html="sanitizeHtml(detail.content)"></div>
       </template>
     </el-dialog>
 
@@ -125,6 +125,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAdminGuides, getAdminGuide, approveGuide, rejectGuide } from '@/api/admin/guide'
+import { sanitizeHtml } from '@/utils/sanitize'
 
 const loading = ref(false)
 const guides = ref([])
