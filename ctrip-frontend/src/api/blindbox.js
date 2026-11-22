@@ -33,6 +33,13 @@ export function getMyDrawRecords(params) {
 }
 
 /**
+ * 将开盒结果导入为个人行程
+ */
+export function importBlindBoxItinerary(orderNo) {
+  return request.post(`/v1/blind-box/orders/${orderNo}/import-itinerary`)
+}
+
+/**
  * 我的盲盒列表
  */
 export function getMyBlindBoxes(params) {

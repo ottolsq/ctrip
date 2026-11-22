@@ -47,9 +47,16 @@
             <el-icon><Share /></el-icon>
             分享结果
           </el-button>
-          <el-button type="primary" size="large" class="action-btn primary" :loading="creating" @click="handleCreateItinerary">
+          <el-button
+            v-if="!isShare"
+            type="primary"
+            size="large"
+            class="action-btn primary"
+            :loading="creating"
+            @click="handleCreateItinerary"
+          >
             <el-icon v-if="!creating"><MagicStick /></el-icon>
-            {{ creating ? '正在创建行程...' : '生成我的行程' }}
+            {{ creating ? '正在导入...' : (result.importedItineraryId ? '查看我的行程' : '生成我的行程') }}
           </el-button>
         </div>
       </el-card>
@@ -235,13 +242,9 @@ import {
 import {
   getBlindBoxResult,
   getSharedBlindBoxResult,
-  shareBlindBoxResult
+  shareBlindBoxResult,
+  importBlindBoxItinerary
 } from '@/api/blindbox'
-import {
-  createItinerary,
-  getItinerary,
-  addItem
-} from '@/api/itinerary'
 
 const route = useRoute()
 const router = useRouter()
@@ -342,140 +345,21 @@ async function copyShareLink() {
 }
 
 async function handleCreateItinerary() {
-  if (creating.value) return
+  if (creating.value || !result.value) return
+  if (result.value.importedItineraryId) {
+    router.push(`/itineraries/${result.value.importedItineraryId}`)
+    return
+  }
   creating.value = true
-
   try {
-    const data = result.value
-    const days = data.days || 3
-
-    const today = new Date()
-    const startDate = formatDate(today)
-    const endDate = new Date(today)
-    endDate.setDate(today.getDate() + days - 1)
-    const endDateStr = formatDate(endDate)
-
-    const createRes = await createItinerary({
-      title: `${data.destination || '盲盒'}·${data.theme || '旅行'}·${days}天`,
-      destinationId: data.destinationId,
-      startDate: startDate,
-      endDate: endDateStr
-    })
-
-    const itineraryId = createRes.data.id
-
-    const detailRes = await getItinerary(itineraryId)
-    const backendDays = detailRes.data.days || []
-
-    if (data.itinerary) {
-      const keys = Object.keys(data.itinerary).sort()
-      for (let i = 0; i < keys.length && i < backendDays.length; i++) {
-        const dayData = data.itinerary[keys[i]]
-        const dayId = backendDays[i].id
-
-        if (dayData.items && Array.isArray(dayData.items)) {
-          for (const itemText of dayData.items) {
-            const item = parseItineraryItem(itemText)
-            await addItem(itineraryId, dayId, item)
-          }
-        }
-      }
-    }
-
-    if (data.hotel && data.hotel.name && backendDays.length > 0) {
-      await addItem(itineraryId, backendDays[backendDays.length - 1].id, {
-        type: 'HOTEL',
-        name: data.hotel.name,
-        location: data.hotel.address || '',
-        timeSlot: '',
-        description: data.hotel.rating ? `评分: ${data.hotel.rating}` : ''
-      })
-    }
-
-    if (data.transport && data.transport.description && backendDays.length > 0) {
-      await addItem(itineraryId, backendDays[0].id, {
-        type: 'TRANSPORT',
-        name: `${data.transport.type || '交通'}: ${data.transport.destination || ''}`,
-        location: '',
-        timeSlot: data.transport.departureTime || '',
-        description: data.transport.description
-      })
-    }
-
-    ElMessage.success('行程已自动创建，可在「我的行程」中查看和编辑')
-    router.push(`/itineraries/${itineraryId}`)
-  } catch (err) {
-    console.error('创建行程失败:', err)
-    ElMessage.error('创建行程失败：' + (err.message || '未知错误'))
+    const res = await importBlindBoxItinerary(route.params.orderNo)
+    result.value.importedItineraryId = res.data.id
+    ElMessage.success('行程已导入，可在「我的行程」中查看和编辑')
+    router.push(`/itineraries/${res.data.id}`)
+  } catch {
+    // 错误已由请求拦截器提示
   } finally {
     creating.value = false
-  }
-}
-
-function formatDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function parseItineraryItem(text) {
-  let type = 'ATTRACTION'
-  let timeSlot = ''
-
-  const timeMatch = text.match(/(上午|下午|傍晚|清晨|中午|凌晨|晚上)/)
-  if (timeMatch) {
-    timeSlot = timeMatch[1]
-  }
-
-  const typeKeywords = [
-    { keyword: '用餐', type: 'FOOD' },
-    { keyword: '午餐', type: 'FOOD' },
-    { keyword: '晚餐', type: 'FOOD' },
-    { keyword: '早餐', type: 'FOOD' },
-    { keyword: '小吃', type: 'FOOD' },
-    { keyword: '海鲜', type: 'FOOD' },
-    { keyword: '餐厅', type: 'FOOD' },
-    { keyword: '入住', type: 'HOTEL' },
-    { keyword: '旅馆', type: 'HOTEL' },
-    { keyword: '酒店', type: 'HOTEL' },
-    { keyword: '高铁', type: 'TRANSPORT' },
-    { keyword: '轮渡', type: 'TRANSPORT' },
-    { keyword: '地铁', type: 'TRANSPORT' },
-    { keyword: '公交', type: 'TRANSPORT' },
-    { keyword: '骑行', type: 'TRANSPORT' },
-    { keyword: '返程', type: 'TRANSPORT' },
-    { keyword: '出发', type: 'TRANSPORT' },
-    { keyword: '参观', type: 'ATTRACTION' },
-    { keyword: '游览', type: 'ATTRACTION' },
-    { keyword: '漫步', type: 'ATTRACTION' },
-    { keyword: '探访', type: 'ATTRACTION' },
-    { keyword: '打卡', type: 'ATTRACTION' },
-    { keyword: '登', type: 'ATTRACTION' },
-    { keyword: '逛', type: 'ATTRACTION' },
-    { keyword: '夜游', type: 'ACTIVITY' },
-    { keyword: '活动', type: 'ACTIVITY' }
-  ]
-
-  for (const item of typeKeywords) {
-    if (text.includes(item.keyword)) {
-      type = item.type
-      break
-    }
-  }
-
-  let name = text
-  const nameMatch = text.match(/([\u4e00-\u9fa5]{2,30})(馆|楼|寺|塔|公园|广场|街|路|海滩|山|岛|码头|大学)/)
-  if (nameMatch) {
-    name = nameMatch[0]
-  }
-
-  return {
-    type: type,
-    name: name.length > 30 ? name.substring(0, 30) + '...' : name,
-    location: '',
-    timeSlot: timeSlot,
-    description: text
   }
 }
 
