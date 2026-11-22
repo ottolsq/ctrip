@@ -204,9 +204,13 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         }
 
         // 更新状态
-        orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+        int updated = orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
                 .eq(BlindBoxOrder::getId, order.getId())
+                .eq(BlindBoxOrder::getStatus, OrderStatus.PENDING)
                 .set(BlindBoxOrder::getStatus, OrderStatus.CANCELLED));
+        if (updated == 0) {
+            throw new BusinessException("订单状态已变化，取消失败");
+        }
 
         // 限定盲盒恢复库存
         BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
@@ -336,7 +340,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         }
 
         // 幂等检查：已支付直接返回
-        if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.OPENED) {
+        if (hasCompletedPayment(order.getStatus())) {
             log.info("支付回调幂等: orderNo={}, status={}", orderNo, order.getStatus());
             return;
         }
@@ -345,11 +349,21 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
             throw new BusinessException("订单状态不支持支付：status=" + order.getStatus());
         }
 
-        orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+        int updated = orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
                 .eq(BlindBoxOrder::getId, order.getId())
+                .eq(BlindBoxOrder::getStatus, OrderStatus.PENDING)
                 .set(BlindBoxOrder::getStatus, OrderStatus.PAID)
                 .set(BlindBoxOrder::getPayTime, LocalDateTime.now())
                 .set(BlindBoxOrder::getPayMethod, payMethod));
+        if (updated == 0) {
+            BlindBoxOrder latest = orderMapper.selectOne(new LambdaQueryWrapper<BlindBoxOrder>()
+                    .eq(BlindBoxOrder::getId, order.getId())
+                    .last("FOR UPDATE"));
+            if (latest != null && hasCompletedPayment(latest.getStatus())) {
+                return;
+            }
+            throw new BusinessException("订单状态已变化，无法支付");
+        }
 
         log.info("支付成功: orderNo={}, payMethod={}", orderNo, payMethod);
 
@@ -358,6 +372,10 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 "ORDER_PAID", order.getId(), orderNo, order.getUserId(),
                 order.getTemplateId(), order.getPayAmount(), payMethod,
                 Map.of("payTime", order.getPayTime() != null ? order.getPayTime().toString() : ""));
+    }
+
+    private boolean hasCompletedPayment(OrderStatus status) {
+        return status == OrderStatus.PAID || status == OrderStatus.PROCESSING || status == OrderStatus.OPENED;
     }
 
     // ========== 定时任务：过期订单扫描 ==========
@@ -382,9 +400,13 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
 
         for (BlindBoxOrder order : expiredOrders.getRecords()) {
             // 更新状态为 CANCELLED
-            orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
+            int updated = orderMapper.update(null, new LambdaUpdateWrapper<BlindBoxOrder>()
                     .eq(BlindBoxOrder::getId, order.getId())
+                    .eq(BlindBoxOrder::getStatus, OrderStatus.PENDING)
                     .set(BlindBoxOrder::getStatus, OrderStatus.CANCELLED));
+            if (updated == 0) {
+                continue;
+            }
 
             // 限定盲盒恢复库存
             BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());

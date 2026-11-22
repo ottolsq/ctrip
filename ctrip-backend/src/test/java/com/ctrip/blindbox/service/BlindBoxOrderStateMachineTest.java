@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
 import com.ctrip.blindbox.entity.enums.BlindBoxType;
@@ -33,8 +34,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -45,7 +48,7 @@ import static org.mockito.Mockito.*;
  * <p>纯 Mock 测试（不启动 Spring 容器）。通过 {@link #initMybatisLambdaCache()}
  * 手动初始化 MyBatis-Plus 实体 Lambda 缓存，避免 "can not find lambda cache" 错误。
  *
- * <p>覆盖合法状态跳转、幂等处理、非法操作拦截三大类共 14 个用例。
+ * <p>覆盖合法状态跳转、幂等处理、并发状态变更和非法操作拦截。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BlindBoxOrderServiceImpl 订单状态机测试")
@@ -371,6 +374,75 @@ class BlindBoxOrderStateMachineTest {
             assertThatThrownBy(() -> service.openBox(USER_ID, ORDER_NO))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("系统繁忙");
+        }
+    }
+
+    @Nested
+    @DisplayName("并发状态变更")
+    class ConcurrentTransitions {
+
+        @Test
+        void cancelOrder_losesTransition_doesNotRestoreStockOrPublish() {
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class)))
+                    .thenReturn(buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PENDING));
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+            assertThatThrownBy(() -> service.cancelOrder(USER_ID, ORDER_NO))
+                    .isInstanceOf(BusinessException.class);
+
+            verifyPendingTransition();
+            verifyNoInteractions(templateMapper, flashSaleService, eventPublisher);
+        }
+
+        @Test
+        void cancelExpiredOrders_losesTransition_doesNotRestoreStock() {
+            BlindBoxOrder order = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PENDING);
+            order.setExpireAt(LocalDateTime.now().minusMinutes(1));
+            Page<BlindBoxOrder> page = new Page<>(1, 100);
+            page.setRecords(List.of(order));
+            when(orderMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+            service.cancelExpiredOrders();
+
+            verifyPendingTransition();
+            verifyNoInteractions(templateMapper, flashSaleService, eventPublisher);
+        }
+
+        @Test
+        void payCallback_losesToCancellation_doesNotPublish() {
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(
+                    buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PENDING),
+                    buildOrder(ORDER_ID, ORDER_NO, OrderStatus.CANCELLED));
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+            assertThatThrownBy(() -> service.payCallback(ORDER_NO, "ALIPAY"))
+                    .isInstanceOf(BusinessException.class);
+
+            verifyPendingTransition();
+            verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        void payCallback_losesToAnotherPayment_returnsWithoutPublishingAgain() {
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(
+                    buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PENDING),
+                    buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PROCESSING));
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+            service.payCallback(ORDER_NO, "ALIPAY");
+
+            verifyPendingTransition();
+            verifyNoInteractions(eventPublisher);
+        }
+
+        private void verifyPendingTransition() {
+            verify(orderMapper).update(isNull(), argThat(wrapper -> {
+                LambdaUpdateWrapper<BlindBoxOrder> update = (LambdaUpdateWrapper<BlindBoxOrder>) wrapper;
+                assertThat(update.getSqlSegment()).contains("id =", "status =");
+                assertThat(update.getParamNameValuePairs().values()).contains(ORDER_ID, OrderStatus.PENDING);
+                return true;
+            }));
         }
     }
 
