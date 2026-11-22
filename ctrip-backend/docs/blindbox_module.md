@@ -571,7 +571,7 @@ WHERE id = ? AND stock >= 1;
 - Redis 未预热时按活动结束时间自动预热；
 - Lua 原子扣减 Redis 库存并防重复购买；成功后发送 `flash.sale.order` 消息；
 - `FlashSaleOrderConsumer` 扣减 MySQL 库存、创建 `PAID` 订单并保存偏好；
-- 失败回滚 Redis 库存，MQ 重试 3 次后进入死信队列。
+- 失败时补偿一次 Redis 库存、释放用户并转死信队列（不自动重试，避免重复加库存）。
 
 详见 `docs/other/redis_rabbitmq_design.md` 9.4 节。
 

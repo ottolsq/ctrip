@@ -187,7 +187,7 @@ updateDestination(id):
 ┌─────────────────────────────────────────────────────┐
 │                   秒杀链路                            │
 │                                                     │
-│  用户请求 → FlashSaleController                     │
+│  用户请求 → POST /blind-box/flash-sale               │
 │    ↓                                                │
 │  ┌─────────────────────────────────┐                │
 │  │ Redis Lua 脚本 (seckill.lua)    │ ← 原子执行     │
@@ -204,9 +204,9 @@ updateDestination(id):
 │             ↓ (异步)                                │
 │  ┌─────────────────────────────────┐                │
 │  │ FlashSaleOrderConsumer          │ ← MQ 消费      │
-│  │  ① Redis SETNX 幂等检查         │                │
+│  │  ① 订单号查库 + SETNX 幂等       │                │
 │  │  ② MySQL 乐观锁最终扣库存        │                │
-│  │  ③ 创建订单持久化               │                │
+│  │  ③ 创建订单 + 保存旅行偏好       │                │
 │  └─────────────────────────────────┘                │
 │                                                     │
 │  对账：@Scheduled 每小时 Redis ↔ MySQL 库存对比       │
@@ -231,10 +231,10 @@ updateDestination(id):
 
 | 机制 | 实现 | 说明 |
 |------|------|------|
-| 库存预热 | 管理员后台触发，`SET seckill:stock:{id} {n} EX {duration}` | 活动开始前加载 |
-| 库存对账 | `@Scheduled(cron = "0 0 * * * ?")` 每小时 | Redis 与 MySQL 差异告警 + 自动修正 |
-| 库存恢复 | 取消/超时时 `INCR seckill:stock:{id}` | 配合 MQ 异步恢复 |
-| 防重复 | Lua 脚本内 SISMEMBER + 消费端 SETNX 双重检查 | 请求层面 + 持久化层面 |
+| 库存预热 | 首次抢购时懒预热，`SET NX seckill:stock:{id} {n} EX {duration}` | 避免并发覆盖已扣减库存 |
+| 库存对账 | `@Scheduled(cron = "0 0 * * * ?")` 每小时 | 仅在 key 不存在时初始化，避免覆盖在途扣减 |
+| 库存恢复 | 取消/超时/正常下单同步 Redis；消费者失败补偿一次 | 保持两条下单链路库存一致 |
+| 防重复 | Lua SISMEMBER + 用户集合 TTL 覆盖活动窗口 + 消费端按订单号幂等 | 请求层面 + 持久化层面 |
 
 **面试追问话术：**
 
