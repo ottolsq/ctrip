@@ -17,6 +17,7 @@ public record ResultResponse(
         String resultText,
         String shareCode,
         LocalDateTime openedAt,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Long importedItineraryId
 ) {
 }

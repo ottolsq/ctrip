@@ -29,7 +29,8 @@ public class ResultConverter {
                 result.getResultText(),
                 result.getShareCode(),
                 result.getOpenedAt(),
-                result.getCreatedAt()
+                result.getCreatedAt(),
+                result.getImportedItineraryId()
         );
     }
 }

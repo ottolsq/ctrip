@@ -56,6 +56,9 @@ public class BlindBoxResult {
     /** 开盒时间 */
     private LocalDateTime openedAt;
 
+    /** 已导入的个人行程 ID（幂等标记） */
+    private Long importedItineraryId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

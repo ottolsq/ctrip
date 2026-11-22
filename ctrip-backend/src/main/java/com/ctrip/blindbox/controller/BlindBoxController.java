@@ -7,11 +7,13 @@ import com.ctrip.blindbox.dto.ProbabilityResponse;
 import com.ctrip.blindbox.dto.TemplateResponse;
 import com.ctrip.blindbox.dto.ResultResponse;
 import com.ctrip.blindbox.prize.BlindBoxPrizeService;
+import com.ctrip.blindbox.service.BlindBoxItineraryImportService;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxResultService;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
 import com.ctrip.blindbox.service.DrawRecordService;
 import com.ctrip.common.response.ApiResponse;
+import com.ctrip.itinerary.dto.response.ItineraryResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -31,17 +33,20 @@ public class BlindBoxController {
     private final BlindBoxOrderService orderService;
     private final BlindBoxPrizeService prizeService;
     private final DrawRecordService drawRecordService;
+    private final BlindBoxItineraryImportService itineraryImportService;
 
     public BlindBoxController(BlindBoxTemplateService templateService,
                               BlindBoxResultService resultService,
                               BlindBoxOrderService orderService,
                               BlindBoxPrizeService prizeService,
-                              DrawRecordService drawRecordService) {
+                              DrawRecordService drawRecordService,
+                              BlindBoxItineraryImportService itineraryImportService) {
         this.templateService = templateService;
         this.resultService = resultService;
         this.orderService = orderService;
         this.prizeService = prizeService;
         this.drawRecordService = drawRecordService;
+        this.itineraryImportService = itineraryImportService;
     }
 
     /**
@@ -73,6 +78,17 @@ public class BlindBoxController {
         // 仅上架模板可查看概率
         templateService.getTemplateDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(prizeService.getProbabilities()));
+    }
+
+    /**
+     * 将开盒结果导入为个人行程（原子、幂等）。
+     */
+    @PostMapping("/orders/{orderNo}/import-itinerary")
+    public ResponseEntity<ApiResponse<ItineraryResponse>> importItinerary(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable String orderNo) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                itineraryImportService.importItinerary(userId, orderNo)));
     }
 
     /**
