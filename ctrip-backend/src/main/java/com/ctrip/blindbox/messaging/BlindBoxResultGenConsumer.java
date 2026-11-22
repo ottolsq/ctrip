@@ -1,5 +1,6 @@
 package com.ctrip.blindbox.messaging;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxPreference;
@@ -19,11 +20,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -44,9 +43,9 @@ import java.util.Map;
  *
  * <h3>可靠性保障</h3>
  * <ol>
- *   <li>Redis SETNX 幂等——同一 eventId 只处理一次</li>
+ *   <li>按订单加行锁，并在锁内校验状态，重复投递不重复生成</li>
  *   <li>AI 调用失败自动回退到 mock 方案——不抛异常，保证最终完成</li>
- *   <li>异常时释放幂等锁让 MQ 重试接管</li>
+ *   <li>生成失败时回滚事务，交由 MQ 重试</li>
  * </ol>
  */
 @Component
@@ -54,16 +53,12 @@ public class BlindBoxResultGenConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(BlindBoxResultGenConsumer.class);
 
-    private static final String IDEMPOTENT_KEY_PREFIX = "mq:idempotent:open:";
-    private static final Duration IDEMPOTENT_TTL = Duration.ofDays(7);
-
     private final BlindBoxOrderMapper orderMapper;
     private final BlindBoxResultMapper resultMapper;
     private final BlindBoxPreferenceService preferenceService;
     private final BlindBoxSchemeService schemeService;
     private final BlindBoxPrizeService prizeService;
     private final DrawRecordService drawRecordService;
-    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final EventPublisher eventPublisher;
 
@@ -73,7 +68,6 @@ public class BlindBoxResultGenConsumer {
                                       BlindBoxSchemeService schemeService,
                                       BlindBoxPrizeService prizeService,
                                       DrawRecordService drawRecordService,
-                                      StringRedisTemplate stringRedisTemplate,
                                       ObjectMapper objectMapper,
                                       EventPublisher eventPublisher) {
         this.orderMapper = orderMapper;
@@ -82,7 +76,6 @@ public class BlindBoxResultGenConsumer {
         this.schemeService = schemeService;
         this.prizeService = prizeService;
         this.drawRecordService = drawRecordService;
-        this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
     }
@@ -96,25 +89,16 @@ public class BlindBoxResultGenConsumer {
     @RabbitListener(queues = com.ctrip.config.RabbitMQConfig.BLINDBOX_RESULT_GEN_QUEUE)
     @Transactional
     public void onOpenRequested(BlindBoxOpenEvent event) {
-        log.info("收到开盒请求: eventId={}, orderId={}", event.eventId(), event.orderId());
-
-        // 1. 幂等检查
-        String idempotentKey = IDEMPOTENT_KEY_PREFIX + event.eventId();
-        Boolean acquired = stringRedisTemplate.opsForValue()
-                .setIfAbsent(idempotentKey, "processing", IDEMPOTENT_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("事件已消费，跳过: eventId={}", event.eventId());
+        if (!OpenRequestOutbox.OPEN_REQUESTED.equals(event.eventType())) {
             return;
         }
+        log.info("收到开盒请求: eventId={}, orderId={}", event.eventId(), event.orderId());
 
         try {
-            // 2. 确认订单状态仍为 PROCESSING
-            BlindBoxOrder order = orderMapper.selectById(event.orderId());
+            BlindBoxOrder order = orderMapper.selectOne(new LambdaQueryWrapper<BlindBoxOrder>()
+                    .eq(BlindBoxOrder::getId, event.orderId())
+                    .last("FOR UPDATE"));
             if (order == null || order.getStatus() != OrderStatus.PROCESSING) {
-                if (order == null || order.getStatus() == OrderStatus.PAID) {
-                    // 事件早于状态提交到达：释放幂等锁，允许后续重投递重新处理
-                    stringRedisTemplate.delete(idempotentKey);
-                }
                 log.info("订单状态非PROCESSING，跳过: orderId={}, status={}",
                         event.orderId(), order != null ? order.getStatus() : "null");
                 return;
@@ -165,18 +149,12 @@ public class BlindBoxResultGenConsumer {
                             "destination", scheme.destination(),
                             "theme", scheme.theme()));
 
-            // 更新幂等状态
-            stringRedisTemplate.opsForValue().set(idempotentKey, "completed", IDEMPOTENT_TTL);
-
         } catch (com.ctrip.common.exception.BusinessException e) {
             // 配置/奖品池等确定性错误：不再无限重投，进入死信队列等待人工处理
-            stringRedisTemplate.delete(idempotentKey);
             log.error("开盒业务失败，转死信: eventId={}, orderId={}, error={}",
                     event.eventId(), event.orderId(), e.getMessage());
             throw new org.springframework.amqp.AmqpRejectAndDontRequeueException(e);
         } catch (Exception e) {
-            // 释放幂等锁，让 MQ 重试
-            stringRedisTemplate.delete(idempotentKey);
             log.error("异步开盒失败: eventId={}, orderId={}, error={}",
                     event.eventId(), event.orderId(), e.getMessage(), e);
             throw e;

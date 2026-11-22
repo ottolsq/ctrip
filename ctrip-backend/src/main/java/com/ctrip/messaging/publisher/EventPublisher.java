@@ -1,5 +1,7 @@
 package com.ctrip.messaging.publisher;
 
+import com.ctrip.blindbox.messaging.OpenRequestOutbox;
+
 import com.ctrip.config.RabbitMQConfig;
 import com.ctrip.messaging.event.BlindBoxOpenEvent;
 import com.ctrip.messaging.event.ContentAuditEvent;
@@ -26,9 +28,11 @@ public class EventPublisher {
     private static final Logger log = LoggerFactory.getLogger(EventPublisher.class);
 
     private final RabbitTemplate rabbitTemplate;
+    private final OpenRequestOutbox openRequestOutbox;
 
-    public EventPublisher(RabbitTemplate rabbitTemplate) {
+    public EventPublisher(RabbitTemplate rabbitTemplate, OpenRequestOutbox openRequestOutbox) {
         this.rabbitTemplate = rabbitTemplate;
+        this.openRequestOutbox = openRequestOutbox;
     }
 
     /**
@@ -62,6 +66,10 @@ public class EventPublisher {
      */
     public void publishBlindBoxOpenEvent(String eventType, Long orderId, Long userId,
                                          Long resultId, Map<String, Object> payload) {
+        if (OpenRequestOutbox.OPEN_REQUESTED.equals(eventType)) {
+            openRequestOutbox.enqueue(orderId, userId);
+            return;
+        }
         BlindBoxOpenEvent event = BlindBoxOpenEvent.of(eventType, orderId, userId, resultId, payload);
         publish(RabbitMQConfig.BLINDBOX_OPEN_EXCHANGE, resolveRoutingKey(eventType), event);
     }

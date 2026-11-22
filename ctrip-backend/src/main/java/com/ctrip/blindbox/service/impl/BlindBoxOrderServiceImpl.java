@@ -37,8 +37,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -307,8 +305,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                         + (latest != null ? latest.getStatus() : "null"));
             }
 
-            // 事务提交后再发 MQ：避免消费者早于 PROCESSING 状态落库而跳过事件
-            publishOpenEventAfterCommit(order, userId);
+            eventPublisher.publishBlindBoxOpenEvent(
+                    "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
 
             log.info("开盒请求已提交: orderNo={}, userId={}", orderNo, userId);
 
@@ -541,21 +539,6 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         } catch (NumberFormatException e) {
             log.warn("解析订单号序号失败: orderNo={}", lastOrderNo);
             return 0L;
-        }
-    }
-
-    private void publishOpenEventAfterCommit(BlindBoxOrder order, Long userId) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    eventPublisher.publishBlindBoxOpenEvent(
-                            "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
-                }
-            });
-        } else {
-            eventPublisher.publishBlindBoxOpenEvent(
-                    "BLINDBOX_OPEN_REQUESTED", order.getId(), userId, null, null);
         }
     }
 

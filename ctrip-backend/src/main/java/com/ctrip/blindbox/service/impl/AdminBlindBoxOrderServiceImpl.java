@@ -174,8 +174,8 @@ public class AdminBlindBoxOrderServiceImpl implements AdminBlindBoxOrderService 
             throw new BusinessException("仅生成中的订单可重试开盒");
         }
 
-        AfterCommitExecutor.run(() -> eventPublisher.publishBlindBoxOpenEvent(
-                "BLINDBOX_OPEN_REQUESTED", order.getId(), order.getUserId(), null, null));
+        eventPublisher.publishBlindBoxOpenEvent(
+                "BLINDBOX_OPEN_REQUESTED", order.getId(), order.getUserId(), null, null);
     }
 
     private BlindBoxOrder requireOrder(String orderNo) {

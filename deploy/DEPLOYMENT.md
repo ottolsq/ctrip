@@ -31,6 +31,11 @@ bash deploy/build.sh
 
 ## 启动
 
+启动新版后端前，先在目标 MySQL 库应用 `ctrip-backend/docs/SQL/ctrip_blindbox_open_outbox.sql`；旧库和新库均需执行。
+`blind_box_open_outbox` 存放待投递开盒请求，只有 RabbitMQ 确认并且消息可路由后才填写 `published_at`。
+保留 `application.properties` 的 `spring.rabbitmq.publisher-confirm-type=correlated`、`spring.rabbitmq.publisher-returns=true` 和 `spring.rabbitmq.template.mandatory=true`，否则无法安全确认投递。
+已有卡在 `PROCESSING` 且未记录的历史订单可由管理员重试；回滚应用版本时保留该表及未投递记录，待新版恢复后继续发送。
+
 ```bash
 bash deploy/start.sh
 ```

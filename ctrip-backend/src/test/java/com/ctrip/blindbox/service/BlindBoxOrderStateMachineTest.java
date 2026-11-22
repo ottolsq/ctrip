@@ -31,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -184,6 +185,29 @@ class BlindBoxOrderStateMachineTest {
             verify(eventPublisher).publishBlindBoxOpenEvent(
                     eq("BLINDBOX_OPEN_REQUESTED"), eq(ORDER_ID), eq(USER_ID),
                     isNull(), isNull());
+        }
+
+        @Test
+        void openBox_recordsRequestBeforeCommit() throws InterruptedException {
+            BlindBoxOrder order = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PAID);
+            BlindBoxOrder processing = buildOrder(ORDER_ID, ORDER_NO, OrderStatus.PROCESSING);
+            when(orderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(order);
+            mockLockAcquired();
+            when(orderMapper.selectById(ORDER_ID)).thenReturn(order, processing);
+            when(orderMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+            when(templateMapper.selectById(TEMPLATE_ID)).thenReturn(buildTemplate(TEMPLATE_ID, BlindBoxType.LIMITED, 5));
+
+            TransactionSynchronizationManager.initSynchronization();
+            try {
+                service.openBox(USER_ID, ORDER_NO);
+
+                var inOrder = inOrder(orderMapper, eventPublisher);
+                inOrder.verify(orderMapper).update(isNull(), any(LambdaUpdateWrapper.class));
+                inOrder.verify(eventPublisher).publishBlindBoxOpenEvent(
+                        "BLINDBOX_OPEN_REQUESTED", ORDER_ID, USER_ID, null, null);
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
         }
     }
 
