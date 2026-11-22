@@ -8,6 +8,7 @@ import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.common.tx.AfterCommitExecutor;
 import com.ctrip.messaging.publisher.EventPublisher;
 import org.slf4j.Logger;
@@ -15,8 +16,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.support.RetrySynchronizationManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -69,17 +74,20 @@ public class FlashSaleOrderConsumer {
     private final BlindBoxPreferenceService preferenceService;
     private final EventPublisher eventPublisher;
     private final StringRedisTemplate stringRedisTemplate;
+    private final FlashSaleService flashSaleService;
 
     public FlashSaleOrderConsumer(BlindBoxTemplateMapper templateMapper,
                                    BlindBoxOrderMapper orderMapper,
                                    BlindBoxPreferenceService preferenceService,
                                    EventPublisher eventPublisher,
-                                   StringRedisTemplate stringRedisTemplate) {
+                                   StringRedisTemplate stringRedisTemplate,
+                                   FlashSaleService flashSaleService) {
         this.templateMapper = templateMapper;
         this.orderMapper = orderMapper;
         this.preferenceService = preferenceService;
         this.eventPublisher = eventPublisher;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.flashSaleService = flashSaleService;
     }
 
     /**
@@ -165,6 +173,7 @@ public class FlashSaleOrderConsumer {
 
         } catch (AmqpRejectAndDontRequeueException e) {
             stringRedisTemplate.delete(idempotentKey);
+            rejectAttemptAfterRollback(message);
             log.error("秒杀订单失败，转死信: orderNo={}, error={}",
                     message.orderNo(), e.getMessage());
             throw e;
@@ -176,10 +185,30 @@ public class FlashSaleOrderConsumer {
             }
             decrementPending(message.templateId());
             removeUser(message.templateId(), message.userId());
+            rejectAttemptAfterRollback(message);
             log.error("秒杀订单创建失败，已补偿并转死信: orderNo={}, templateId={}, error={}",
                     message.orderNo(), message.templateId(), e.getMessage(), e);
             throw new AmqpRejectAndDontRequeueException(e);
         }
+    }
+
+    private void rejectAttemptAfterRollback(FlashSaleMessage message) {
+        RetryContext retryContext = RetrySynchronizationManager.getContext();
+        if (retryContext != null) {
+            retryContext.setExhaustedOnly();
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            flashSaleService.markAttemptFailed(message.userId(), message.orderNo());
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    flashSaleService.markAttemptFailed(message.userId(), message.orderNo());
+                }
+            }
+        });
     }
 
     private void rollbackRedisStock(Long templateId) {

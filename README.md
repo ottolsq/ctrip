@@ -160,7 +160,8 @@ npm run dev
 - `scripts/run_all_e2e.py`：一键运行全部 API E2E（含 429 重试）；每次子脚本运行限时 300 秒，超时终止并报告已有输出
 - `scripts/stress_blindbox.py`：LIMITED 库存并发压测脚本
 - `scripts/e2e_admin_p3.py`：P3 概率/保底/抽取记录 API 级端到端验证脚本
-- `scripts/e2e_flash_sale.py`：限定盲盒秒杀链路 API 级端到端验证脚本
+- `scripts/e2e_flash_sale.py`：限定盲盒秒杀 API 端到端验证，覆盖顺序抢购和未预热模板的并发首抢
+- 秒杀失败回归：仅在本地隔离 QA 后端（8080、独立 MySQL 库、RabbitMQ vhost 和 Redis DB）运行。安装有 `redis-cli` 的环境可用 `FLASH_E2E_REDIS_DB=13 python3 ctrip-backend/scripts/e2e_flash_sale.py`；DB 号必须与 QA 后端一致。脚本会对新建测试模板注入一份陈旧的 Redis 库存。
 - `other/p2_acceptance.md`：P2 测试、压测与部署验收记录
 - `other/technical_debt.md`：剩余技术债登记（不阻塞验收）
 - 仓库根目录 `deploy/DEPLOYMENT.md`：jar + WSL nginx 部署试运行说明

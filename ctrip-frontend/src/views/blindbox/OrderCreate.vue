@@ -102,7 +102,7 @@
             :loading="submitLoading"
             @click="handleSubmit"
           >
-            {{ isFlash ? '立即抢购' : '提交订单' }}
+            {{ pendingFlashOrderNo ? '查询抢购结果' : isFlash ? '立即抢购' : '提交订单' }}
           </el-button>
         </el-card>
       </el-col>
@@ -117,7 +117,7 @@ import {
   getBlindBoxTemplate,
   createBlindBoxOrder,
   flashSaleBlindBox,
-  getMyBlindBoxes
+  getFlashSaleStatus
 } from '@/api/blindbox'
 import { Box } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -129,6 +129,7 @@ const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 const submitLoading = ref(false)
+const pendingFlashOrderNo = ref(null)
 const template = ref(null)
 const isFlash = computed(() => route.query.flash === '1')
 
@@ -167,11 +168,17 @@ const loadTemplate = async () => {
 }
 
 const handleSubmit = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
+  if (!pendingFlashOrderNo.value) {
+    const valid = await formRef.value.validate().catch(() => false)
+    if (!valid) return
+  }
 
   submitLoading.value = true
   try {
+    if (pendingFlashOrderNo.value) {
+      await pollFlashSale(pendingFlashOrderNo.value)
+      return
+    }
     if (isFlash.value) {
       await handleFlashSale()
       return
@@ -212,22 +219,28 @@ async function handleFlashSale() {
     return
   }
 
-  const orderNo = data.orderNo
-  ElMessage.success('抢购成功，正在生成订单...')
+  pendingFlashOrderNo.value = data.orderNo
+  ElMessage.info('抢购请求已受理，正在生成订单...')
+  await pollFlashSale(data.orderNo)
+}
+
+async function pollFlashSale(orderNo) {
   for (let i = 0; i < 20; i++) {
     await new Promise(resolve => setTimeout(resolve, 500))
-    try {
-      const res = await getMyBlindBoxes({ page: 1, limit: 20 })
-      if ((res.data?.records || []).some(item => item.orderNo === orderNo)) {
-        router.push(`/blind-box/orders/${orderNo}/open`)
-        return
-      }
-    } catch {
-      // 继续轮询
+    const res = await getFlashSaleStatus(orderNo)
+    if (res.data?.status === 'CREATED') {
+      pendingFlashOrderNo.value = null
+      ElMessage.success('抢购成功，订单已创建')
+      router.push(`/blind-box/orders/${orderNo}/open`)
+      return
+    }
+    if (res.data?.status === 'FAILED') {
+      pendingFlashOrderNo.value = null
+      ElMessage.error('抢购订单创建失败，请查看库存后重试')
+      return
     }
   }
-  ElMessage.info('订单生成中，请稍后在「我的盲盒」查看')
-  router.push('/blind-box/my')
+  ElMessage.info('暂未确认建单结果，请稍后点击「查询抢购结果」')
 }
 
 onMounted(() => {

@@ -95,6 +95,12 @@ public class BlindBoxController {
         return ResponseEntity.ok(ApiResponse.ok(flashSaleService.execute(userId, request)));
     }
 
+    @GetMapping("/flash-sale/{orderNo}/status")
+    public ResponseEntity<ApiResponse<FlashSaleService.FlashSaleStatus>> getFlashSaleStatus(
+            @AuthenticationPrincipal Long userId, @PathVariable String orderNo) {
+        return ResponseEntity.ok(ApiResponse.ok(flashSaleService.getAttemptStatus(userId, orderNo)));
+    }
+
     /**
      * 将开盒结果导入为个人行程（原子、幂等）。
      */

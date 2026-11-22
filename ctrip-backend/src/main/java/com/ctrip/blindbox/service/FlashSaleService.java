@@ -13,6 +13,7 @@ import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.rule.ActivityWindow;
 import com.ctrip.blindbox.rule.BlindBoxRuleConfigParser;
 import com.ctrip.common.exception.BusinessException;
+import com.ctrip.common.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -50,6 +51,8 @@ import java.util.List;
  */
 @Service
 public class FlashSaleService {
+
+    private static final Duration ATTEMPT_TTL = Duration.ofHours(24);
 
     private static final Logger log = LoggerFactory.getLogger(FlashSaleService.class);
 
@@ -192,12 +195,48 @@ public class FlashSaleService {
         FlashSaleMessage message = FlashSaleMessage.of(
                 userId, request.templateId(), orderNo,
                 request.departureCity(), request.budgetLevel(), request.theme());
+        stringRedisTemplate.opsForValue().set(
+                attemptKey(userId, orderNo), AttemptStatus.QUEUED.name(), ATTEMPT_TTL);
         rabbitTemplate.convertAndSend(FLASH_SALE_EXCHANGE, FLASH_SALE_ORDER_RK, message);
 
         log.info("秒杀成功: userId={}, templateId={}, orderNo={}",
                 userId, request.templateId(), orderNo);
         return FlashSaleResult.queued(orderNo);
     }
+
+    public FlashSaleStatus getAttemptStatus(Long userId, String orderNo) {
+        if (orderMapper.selectCount(new LambdaQueryWrapper<BlindBoxOrder>()
+                .eq(BlindBoxOrder::getOrderNo, orderNo)
+                .eq(BlindBoxOrder::getUserId, userId)
+                .eq(BlindBoxOrder::getPayMethod, "FLASH_SALE")) > 0) {
+            return new FlashSaleStatus(AttemptStatus.CREATED);
+        }
+        String status = stringRedisTemplate.opsForValue().get(attemptKey(userId, orderNo));
+        if (AttemptStatus.FAILED.name().equals(status)) {
+            return new FlashSaleStatus(AttemptStatus.FAILED);
+        }
+        if (AttemptStatus.QUEUED.name().equals(status)) {
+            return new FlashSaleStatus(AttemptStatus.QUEUED);
+        }
+        throw new ResourceNotFoundException("未找到抢购记录");
+    }
+
+    public void markAttemptFailed(Long userId, String orderNo) {
+        try {
+            stringRedisTemplate.opsForValue().setIfPresent(
+                    attemptKey(userId, orderNo), AttemptStatus.FAILED.name(), ATTEMPT_TTL);
+        } catch (RuntimeException ex) {
+            log.warn("无法记录秒杀建单失败状态: orderNo={}", orderNo, ex);
+        }
+    }
+
+    private static String attemptKey(Long userId, String orderNo) {
+        return "seckill:attempt:" + userId + ":" + orderNo;
+    }
+
+    public enum AttemptStatus { QUEUED, CREATED, FAILED }
+
+    public record FlashSaleStatus(AttemptStatus status) {}
 
     // ========================================================================
     // 库存管理（管理员后台调用）

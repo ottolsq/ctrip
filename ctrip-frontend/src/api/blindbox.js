@@ -46,6 +46,10 @@ export function flashSaleBlindBox(data) {
   return request.post('/v1/blind-box/flash-sale', data)
 }
 
+export function getFlashSaleStatus(orderNo) {
+  return request.get(`/v1/blind-box/flash-sale/${encodeURIComponent(orderNo)}/status`)
+}
+
 /**
  * 我的盲盒列表
  */

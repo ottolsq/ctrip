@@ -1071,12 +1071,20 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 - Redis Lua 原子预扣库存（未预热时自动从 MySQL 加载），成功后发送 MQ 异步创建 `PAID` 订单；
 - HTTP 状态固定为 **200**，结果在内层 `data`：
   `{"success":true,"data":{"success":true,"status":"QUEUED","orderNo":"...","message":"..."},"error":null}`
-  - `QUEUED`：抢购成功，订单异步创建；
+  - `QUEUED`：请求已受理，订单尚未确认创建；
   - `SOLD_OUT`：已售罄；
   - `DUPLICATED`：同一用户同一模板已抢购；
 - 异步消费者会保存出发城市/预算/主题，开盒流程可直接使用；
 - 活动窗口外/模板下架/非限定盲盒 → **400**；
 - Redis 秒杀库存 key 存在期间，普通 `POST /blind-box/orders` 对同一 LIMITED 模板返回 **400**（`限时抢购中，请使用秒杀入口`）。
+
+### 查询秒杀建单状态
+
+`GET /api/v1/blind-box/flash-sale/{orderNo}/status`（需登录，仅发起人可查）
+
+HTTP **200**，返回 `data.status`：`QUEUED`（尚未确认建单结果）、`CREATED`（订单已落库）或 `FAILED`（消费者确认建单失败）。不存在、已过期或不属于当前用户的记录均返回 **404**。
+
+排队与失败状态存于 Redis，各保留 24 小时；已建单状态以数据库为准。消息未送达、进程中断等无法确认结果的情况不会被标为 `FAILED`。
 
 ## 合规接口（P3）
 

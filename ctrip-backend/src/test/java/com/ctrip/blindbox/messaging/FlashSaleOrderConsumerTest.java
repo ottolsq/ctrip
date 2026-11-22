@@ -8,6 +8,7 @@ import com.ctrip.blindbox.entity.BlindBoxTemplate;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.messaging.publisher.EventPublisher;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,6 +22,9 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -48,6 +52,8 @@ class FlashSaleOrderConsumerTest {
     @Mock
     private StringRedisTemplate redisTemplate;
     @Mock
+    private FlashSaleService flashSaleService;
+    @Mock
     private ValueOperations<String, String> valueOperations;
     @Mock
     private SetOperations<String, String> setOperations;
@@ -64,7 +70,7 @@ class FlashSaleOrderConsumerTest {
     @BeforeEach
     void setUp() {
         consumer = new FlashSaleOrderConsumer(
-                templateMapper, orderMapper, preferenceService, eventPublisher, redisTemplate);
+                templateMapper, orderMapper, preferenceService, eventPublisher, redisTemplate, flashSaleService);
     }
 
     private FlashSaleMessage message() {
@@ -92,6 +98,7 @@ class FlashSaleOrderConsumerTest {
         verify(preferenceService).savePreference(
                 any(), eq("杭州"), eq("STANDARD"), eq("美食"));
         verify(valueOperations, never()).increment(anyString());
+        verify(flashSaleService, never()).markAttemptFailed(any(), any());
     }
 
     @Test
@@ -122,8 +129,17 @@ class FlashSaleOrderConsumerTest {
                 .thenThrow(new RuntimeException("db down"));
         when(valueOperations.get("seckill:stock:9")).thenReturn("0");
 
-        assertThatThrownBy(() -> consumer.onCreateOrder(message()))
-                .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThatThrownBy(() -> consumer.onCreateOrder(message()))
+                    .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+            verify(flashSaleService, never()).markAttemptFailed(any(), any());
+            TransactionSynchronizationManager.getSynchronizations().forEach(synchronization ->
+                    synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+            verify(flashSaleService).markAttemptFailed(1L, "BB202611220001");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
 
         verify(valueOperations).increment("seckill:stock:9");
         verify(setOperations).remove("seckill:users:9", "1");
@@ -137,11 +153,16 @@ class FlashSaleOrderConsumerTest {
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(templateMapper.decrementStock(9L)).thenReturn(0);
 
-        assertThatThrownBy(() -> consumer.onCreateOrder(message()))
+        RetryTemplate retry = RetryTemplate.builder().maxAttempts(3).build();
+        assertThatThrownBy(() -> retry.execute(context -> {
+            consumer.onCreateOrder(message());
+            return null;
+        }))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
 
         verify(valueOperations, never()).increment(anyString());
         verify(setOperations).remove("seckill:users:9", "1");
+        verify(flashSaleService).markAttemptFailed(1L, "BB202611220001");
     }
 
     @Test
