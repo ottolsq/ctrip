@@ -117,6 +117,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 throw new BusinessException("库存不足");
             }
             decrementStockWithLock(template.getId());
+            flashSaleService.onNormalPurchase(template.getId());
         }
 
         // 3. 创建订单
@@ -208,6 +209,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
         if (template != null && template.getType() == BlindBoxType.LIMITED) {
             templateMapper.incrementStock(template.getId());
+            flashSaleService.onStockRestored(template.getId());
             log.info("取消订单恢复库存: orderNo={}, templateId={}", orderNo, template.getId());
         }
 
@@ -385,6 +387,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
             BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
             if (template != null && template.getType() == BlindBoxType.LIMITED) {
                 templateMapper.incrementStock(template.getId());
+                flashSaleService.onStockRestored(template.getId());
             }
 
             log.info("自动取消过期订单: orderNo={}, templateId={}", order.getOrderNo(), order.getTemplateId());

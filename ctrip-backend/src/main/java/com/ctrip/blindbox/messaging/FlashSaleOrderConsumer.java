@@ -1,5 +1,6 @@
 package com.ctrip.blindbox.messaging;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ctrip.blindbox.dto.FlashSaleMessage;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.BlindBoxTemplate;
@@ -9,6 +10,7 @@ import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -28,7 +30,7 @@ import java.time.LocalDateTime;
  *   <li><b>幂等消费</b>——Redis SETNX 防重复处理</li>
  *   <li><b>乐观锁兜底</b>——MySQL {@code WHERE stock >= 1} 防超卖</li>
  *   <li><b>失败回滚</b>——MySQL 扣减失败时 INCR 恢复 Redis 库存</li>
- *   <li><b>MQ 重试</b>——异常抛出后由 RabbitMQ 重试（3 次 + 死信队列）</li>
+ *   <li><b>失败补偿</b>——失败时补偿一次 Redis 库存并转死信队列，避免重试重复加库存</li>
  * </ol>
  *
  * <h3>消费流程</h3>
@@ -53,6 +55,9 @@ public class FlashSaleOrderConsumer {
 
     /** 秒杀库存 Key 前缀：seckill:stock:{templateId}（用于失败回滚） */
     private static final String STOCK_KEY_PREFIX = "seckill:stock:";
+
+    /** 秒杀用户集合 Key 前缀：seckill:users:{templateId} */
+    private static final String USERS_KEY_PREFIX = "seckill:users:";
 
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
@@ -81,32 +86,39 @@ public class FlashSaleOrderConsumer {
         log.info("收到秒杀订单消息: orderNo={}, userId={}, templateId={}",
                 message.orderNo(), message.userId(), message.templateId());
 
-        // 1. 幂等检查——同一用户同一模板只处理一次
-        String idempotentKey = IDEMPOTENT_KEY_PREFIX + message.userId() + ":" + message.templateId();
-        Boolean acquired = stringRedisTemplate.opsForValue()
-                .setIfAbsent(idempotentKey, "1", IDEMPOTENT_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("消息已消费，跳过: orderNo={}", message.orderNo());
+        // 1. 以订单号幂等：数据库已有订单直接成功（覆盖提交后标记丢失）
+        BlindBoxOrder existing = orderMapper.selectOne(
+                new LambdaQueryWrapper<BlindBoxOrder>()
+                        .eq(BlindBoxOrder::getOrderNo, message.orderNo()));
+        if (existing != null) {
+            log.info("秒杀订单已存在，跳过: orderNo={}", message.orderNo());
             return;
         }
 
+        String idempotentKey = IDEMPOTENT_KEY_PREFIX + message.orderNo();
+        Boolean acquired = stringRedisTemplate.opsForValue()
+                .setIfAbsent(idempotentKey, "processing", IDEMPOTENT_TTL);
+        if (!Boolean.TRUE.equals(acquired)) {
+            log.info("秒杀消息正在处理或已处理，跳过: orderNo={}", message.orderNo());
+            return;
+        }
+
+        boolean stockDeducted = false;
         try {
             // 2. MySQL 乐观锁扣库存（最终一致性保证）
             int rows = templateMapper.decrementStock(message.templateId());
             if (rows == 0) {
-                // 不应发生——Redis 已扣但 MySQL 库存不足
-                rollbackRedisStock(message.templateId());
-                log.error("秒杀库存异常(Redis已扣但MySQL不足): templateId={}, orderNo={}",
-                        message.templateId(), message.orderNo());
-                return;
+                // Redis 已扣但 MySQL 不足：不恢复 Redis，释放用户以便重试，消息进死信
+                removeUser(message.templateId(), message.userId());
+                throw new AmqpRejectAndDontRequeueException(
+                        "秒杀库存异常(Redis已扣但MySQL不足): orderNo=" + message.orderNo());
             }
+            stockDeducted = true;
 
             // 3. 查询模板信息
             BlindBoxTemplate template = templateMapper.selectById(message.templateId());
             if (template == null) {
-                rollbackRedisStock(message.templateId());
-                log.error("秒杀模板不存在: templateId={}", message.templateId());
-                return;
+                throw new IllegalStateException("秒杀模板不存在: " + message.templateId());
             }
 
             // 4. 创建订单——秒杀跳过支付步骤，直接置为 PAID
@@ -131,29 +143,31 @@ public class FlashSaleOrderConsumer {
             log.info("秒杀订单创建成功: orderNo={}, userId={}, templateId={}, amount={}",
                     message.orderNo(), message.userId(), message.templateId(), template.getPrice());
 
-        } catch (Exception e) {
-            // 任何步骤失败 → 释放幂等锁(允许MQ重试) + 回滚Redis库存
+        } catch (AmqpRejectAndDontRequeueException e) {
             stringRedisTemplate.delete(idempotentKey);
-            rollbackRedisStock(message.templateId());
-            log.error("秒杀订单创建失败，已回滚: orderNo={}, templateId={}, error={}",
+            log.error("秒杀订单失败，转死信: orderNo={}, error={}",
+                    message.orderNo(), e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            // 每次消息只补偿一次；不重试，避免重复 INCR 造成 Redis 库存膨胀
+            stringRedisTemplate.delete(idempotentKey);
+            if (stockDeducted) {
+                rollbackRedisStock(message.templateId());
+            }
+            removeUser(message.templateId(), message.userId());
+            log.error("秒杀订单创建失败，已补偿并转死信: orderNo={}, templateId={}, error={}",
                     message.orderNo(), message.templateId(), e.getMessage(), e);
-            throw e; // 触发 RabbitMQ 重试机制
+            throw new AmqpRejectAndDontRequeueException(e);
         }
     }
 
-    /**
-     * 恢复 Redis 库存——MySQL 扣减失败时的回滚操作。
-     *
-     * <p>场景：
-     * <ul>
-     *   <li>MySQL 乐观锁返回 0（库存已空但 Redis 未及时同步）</li>
-     *   <li>模板不存在（数据异常）</li>
-     *   <li>订单插入失败（数据库异常）</li>
-     * </ul>
-     */
     private void rollbackRedisStock(Long templateId) {
-        String stockKey = STOCK_KEY_PREFIX + templateId;
-        stringRedisTemplate.opsForValue().increment(stockKey);
+        stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
         log.warn("已回滚 Redis 库存: templateId={}", templateId);
+    }
+
+    private void removeUser(Long templateId, Long userId) {
+        stringRedisTemplate.opsForSet().remove(
+                USERS_KEY_PREFIX + templateId, userId.toString());
     }
 }

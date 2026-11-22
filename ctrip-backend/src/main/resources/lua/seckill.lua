@@ -3,6 +3,7 @@
 --
 -- KEYS[1] = templateId（盲盒模板 ID）
 -- ARGV[1] = userId（用户 ID）
+-- ARGV[2] = 用户集合 TTL 秒数（可选，默认 86400）
 --
 -- 返回值：
 --   1  = 秒杀成功（已扣减库存）
@@ -27,7 +28,11 @@ end
 redis.call('DECR', stockKey)
 redis.call('SADD', userSetKey, ARGV[1])
 
--- 4. 设置用户集合过期时间（24h），避免长期占用 Redis 内存
-redis.call('EXPIRE', userSetKey, 86400)
+-- 4. 用户集合 TTL 覆盖活动窗口（默认 24h），避免长期占用 Redis 内存
+local ttl = tonumber(ARGV[2])
+if not ttl or ttl <= 0 then
+    ttl = 86400
+end
+redis.call('EXPIRE', userSetKey, ttl)
 
 return 1

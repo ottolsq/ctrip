@@ -97,7 +97,7 @@ class FlashSaleServiceExecuteTest {
         assertThat(result.success()).isTrue();
         assertThat(result.status()).isEqualTo("QUEUED");
         assertThat(result.orderNo()).startsWith("BB");
-        verify(valueOperations).set(
+        verify(valueOperations).setIfAbsent(
                 eq("seckill:stock:9"), eq("5"), any(Duration.class));
 
         ArgumentCaptor<Object> messageCaptor = ArgumentCaptor.forClass(Object.class);

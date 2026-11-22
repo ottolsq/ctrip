@@ -99,8 +99,8 @@ public class FlashSaleService {
     /**
      * 执行秒杀——Lua 原子预扣库存 + 异步发 MQ。
      *
-     * <p>此方法仅做 Redis 操作和 MQ 发送，不涉及数据库查询，
-     * 响应时间在 5ms 以内。
+     * <p>核心扣减在 Redis Lua 中完成；请求前会校验模板与活动窗口，
+     * 并生成订单号后发送 MQ。
      *
      * @param userId     用户 ID
      * @param templateId 盲盒模板 ID
@@ -134,10 +134,12 @@ public class FlashSaleService {
         }
 
         // 1. Lua 脚本原子预扣库存
+        long userSetTtl = Duration.between(now, window.end()).plusHours(1).toSeconds();
         Long result = stringRedisTemplate.execute(
                 seckillScript,
                 List.of(templateId.toString()),
-                userId.toString()
+                userId.toString(),
+                String.valueOf(Math.max(userSetTtl, 60))
         );
 
         if (result == null) {
@@ -147,7 +149,16 @@ public class FlashSaleService {
 
         // 2. 根据返回值判断结果
         return switch (result.intValue()) {
-            case 1 -> handleSuccess(userId, request);
+            case 1 -> {
+                try {
+                    yield handleSuccess(userId, request);
+                } catch (RuntimeException e) {
+                    rollbackReservation(userId, templateId);
+                    log.error("秒杀后续处理失败，已回滚库存: userId={}, templateId={}",
+                            userId, templateId, e);
+                    throw new BusinessException("抢购失败，请稍后重试");
+                }
+            }
             case 0 -> {
                 log.debug("秒杀库存不足: userId={}, templateId={}", userId, templateId);
                 yield FlashSaleResult.soldOut();
@@ -166,6 +177,11 @@ public class FlashSaleService {
     /**
      * 秒杀成功：生成订单号 → 发送 MQ 消息 → 返回排队结果。
      */
+    private void rollbackReservation(Long userId, Long templateId) {
+        stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
+        stringRedisTemplate.opsForSet().remove(USERS_KEY_PREFIX + templateId, userId.toString());
+    }
+
     private FlashSaleResult handleSuccess(Long userId, FlashSaleRequest request) {
         String orderNo = generateOrderNo();
 
@@ -193,11 +209,38 @@ public class FlashSaleService {
      * @param stock            库存数量
      * @param activityDuration 活动持续时间（Redis key 的 TTL）
      */
-    public void prewarmStock(Long templateId, int stock, Duration activityDuration) {
+    public boolean prewarmStock(Long templateId, int stock, Duration activityDuration) {
         String stockKey = STOCK_KEY_PREFIX + templateId;
-        stringRedisTemplate.opsForValue().set(stockKey, String.valueOf(stock), activityDuration);
-        log.info("秒杀库存预热完成: templateId={}, stock={}, ttl={}s",
-                templateId, stock, activityDuration.toSeconds());
+        Boolean initialized = stringRedisTemplate.opsForValue().setIfAbsent(
+                stockKey, String.valueOf(stock), activityDuration);
+        if (Boolean.TRUE.equals(initialized)) {
+            log.info("秒杀库存预热完成: templateId={}, stock={}, ttl={}s",
+                    templateId, stock, activityDuration.toSeconds());
+        }
+        return Boolean.TRUE.equals(initialized);
+    }
+
+    /**
+     * 正常下单扣减 MySQL 库存后，同步扣减已预热的 Redis 库存。
+     */
+    public void onNormalPurchase(Long templateId) {
+        if (getRemainingStock(templateId) == -1) {
+            return;
+        }
+        Long remaining = stringRedisTemplate.opsForValue()
+                .decrement(STOCK_KEY_PREFIX + templateId);
+        if (remaining != null && remaining < 0) {
+            stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
+        }
+    }
+
+    /**
+     * 取消/退款恢复 MySQL 库存后，同步恢复 Redis（仅当库存 key 存在）。
+     */
+    public void onStockRestored(Long templateId) {
+        if (getRemainingStock(templateId) != -1) {
+            stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
+        }
     }
 
     /**
