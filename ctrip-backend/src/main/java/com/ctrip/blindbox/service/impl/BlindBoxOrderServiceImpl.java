@@ -569,15 +569,8 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
     // ========================================================================
 
     /**
-     * 每小时对比 Redis 秒杀库存与 MySQL 库存，发现差异时以 MySQL 为准修正。
-     *
-     * <p>此任务在秒杀活动中起最终一致性兜底作用：
-     * <ul>
-     *   <li>Redis 库存因消费者失败回滚不完整等原因与 MySQL 偏差</li>
-     *   <li>定时对账自动发现并修正，避免超卖或库存残留</li>
-     * </ul>
-     *
-     * <p>仅检查活跃状态的限定盲盒模板。
+     * 每小时检查活跃限定盲盒的 Redis 与 MySQL 库存，仅记录差异。
+     * Redis 预扣与异步建单之间的正常差异不能与实际库存异常区分，不能用 MySQL 快照覆盖 Redis。
      */
     @Scheduled(cron = "0 0 * * * ?")
     @Transactional(readOnly = true)
@@ -588,7 +581,6 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
         wrapper.eq(BlindBoxTemplate::getStatus, TemplateStatus.ACTIVE);
         var templates = templateMapper.selectList(wrapper);
 
-        int reconciled = 0;
         for (BlindBoxTemplate template : templates) {
             // 获取 Redis 中的剩余库存（未预热的跳过）
             int redisStock = flashSaleService.getRemainingStock(template.getId());
@@ -602,18 +594,10 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 continue;
             }
 
-            // 对比并修正
             if (redisStock != mysqlStock) {
-                log.warn("库存不一致: templateId={}, redis={}, mysql={}",
+                log.warn("库存对账发现差异（未修改库存）: templateId={}, redis={}, mysql={}",
                         template.getId(), redisStock, mysqlStock);
-                // 以 MySQL 为准——数据库是最终真相源
-                flashSaleService.resetStock(template.getId(), mysqlStock);
-                reconciled++;
             }
-        }
-
-        if (reconciled > 0) {
-            log.info("库存对账完成，修正 {} 个模板", reconciled);
         }
     }
 }
