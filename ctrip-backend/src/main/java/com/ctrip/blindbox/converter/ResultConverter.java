@@ -33,4 +33,15 @@ public class ResultConverter {
                 result.getImportedItineraryId()
         );
     }
+
+    /**
+     * 公开分享响应不暴露原订单所有者的个人行程 ID。
+     */
+    public static ResultResponse toSharedResponse(BlindBoxResult result, String orderNo) {
+        ResultResponse response = toResponse(result, orderNo);
+        return new ResultResponse(
+                response.id(), response.orderNo(), response.destination(),
+                response.destinationId(), response.theme(), response.resultText(),
+                response.shareCode(), response.openedAt(), response.createdAt(), null);
+    }
 }

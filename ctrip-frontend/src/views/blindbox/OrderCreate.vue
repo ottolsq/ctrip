@@ -192,13 +192,8 @@ const handleSubmit = async () => {
       router.push('/blind-box/my')
     }
   } catch (error) {
+    // 错误提示由请求拦截器统一展示
     console.error('[OrderCreate] handleSubmit error:', error)
-    const errorMsg = error.response?.data?.message || error.message || '订单创建失败'
-    if (errorMsg.includes('Duplicate entry') || errorMsg.includes('uk_order_no')) {
-      ElMessage.error('订单创建失败，订单号重复，请稍后重试')
-    } else {
-      ElMessage.error(errorMsg)
-    }
   } finally {
     submitLoading.value = false
   }
@@ -222,7 +217,7 @@ async function handleFlashSale() {
   for (let i = 0; i < 20; i++) {
     await new Promise(resolve => setTimeout(resolve, 500))
     try {
-      const res = await getMyBlindBoxes({ page: 1, size: 20 })
+      const res = await getMyBlindBoxes({ page: 1, limit: 20 })
       if ((res.data?.records || []).some(item => item.orderNo === orderNo)) {
         router.push(`/blind-box/orders/${orderNo}/open`)
         return

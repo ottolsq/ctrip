@@ -8,6 +8,7 @@ import com.ctrip.blindbox.entity.BlindBoxTemplate;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
+import com.ctrip.messaging.publisher.EventPublisher;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +44,8 @@ class FlashSaleOrderConsumerTest {
     @Mock
     private BlindBoxPreferenceService preferenceService;
     @Mock
+    private EventPublisher eventPublisher;
+    @Mock
     private StringRedisTemplate redisTemplate;
     @Mock
     private ValueOperations<String, String> valueOperations;
@@ -61,7 +64,7 @@ class FlashSaleOrderConsumerTest {
     @BeforeEach
     void setUp() {
         consumer = new FlashSaleOrderConsumer(
-                templateMapper, orderMapper, preferenceService, redisTemplate);
+                templateMapper, orderMapper, preferenceService, eventPublisher, redisTemplate);
     }
 
     private FlashSaleMessage message() {
@@ -102,6 +105,7 @@ class FlashSaleOrderConsumerTest {
                 .id(9L).price(new BigDecimal("88.00")).build());
         when(preferenceService.savePreference(any(), anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("db down"));
+        when(valueOperations.get("seckill:stock:9")).thenReturn("0");
 
         assertThatThrownBy(() -> consumer.onCreateOrder(message()))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);

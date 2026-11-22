@@ -8,6 +8,8 @@ import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.BlindBoxPreferenceService;
+import com.ctrip.common.tx.AfterCommitExecutor;
+import com.ctrip.messaging.publisher.EventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
@@ -62,15 +64,18 @@ public class FlashSaleOrderConsumer {
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
     private final BlindBoxPreferenceService preferenceService;
+    private final EventPublisher eventPublisher;
     private final StringRedisTemplate stringRedisTemplate;
 
     public FlashSaleOrderConsumer(BlindBoxTemplateMapper templateMapper,
                                    BlindBoxOrderMapper orderMapper,
                                    BlindBoxPreferenceService preferenceService,
+                                   EventPublisher eventPublisher,
                                    StringRedisTemplate stringRedisTemplate) {
         this.templateMapper = templateMapper;
         this.orderMapper = orderMapper;
         this.preferenceService = preferenceService;
+        this.eventPublisher = eventPublisher;
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
@@ -134,11 +139,21 @@ public class FlashSaleOrderConsumer {
                     .build();
             orderMapper.insert(order);
 
-            if (message.departureCity() != null && message.budgetLevel() != null) {
-                preferenceService.savePreference(
-                        order.getId(), message.departureCity(),
-                        message.budgetLevel(), message.theme());
-            }
+            // 旧格式消息没有偏好字段：写入兜底偏好，保证开盒流程可用
+            preferenceService.savePreference(
+                    order.getId(),
+                    message.departureCity() != null ? message.departureCity() : "未知",
+                    message.budgetLevel() != null ? message.budgetLevel() : "STANDARD",
+                    message.theme());
+
+            AfterCommitExecutor.run(() -> {
+                eventPublisher.publishOrderStatusEvent(
+                        "ORDER_CREATED", order.getId(), order.getOrderNo(), order.getUserId(),
+                        order.getTemplateId(), order.getPayAmount(), "FLASH_SALE", null);
+                eventPublisher.publishOrderStatusEvent(
+                        "ORDER_PAID", order.getId(), order.getOrderNo(), order.getUserId(),
+                        order.getTemplateId(), order.getPayAmount(), "FLASH_SALE", null);
+            });
 
             log.info("秒杀订单创建成功: orderNo={}, userId={}, templateId={}, amount={}",
                     message.orderNo(), message.userId(), message.templateId(), template.getPrice());
@@ -162,7 +177,11 @@ public class FlashSaleOrderConsumer {
     }
 
     private void rollbackRedisStock(Long templateId) {
-        stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
+        String stockKey = STOCK_KEY_PREFIX + templateId;
+        if (stringRedisTemplate.opsForValue().get(stockKey) == null) {
+            return;
+        }
+        stringRedisTemplate.opsForValue().increment(stockKey);
         log.warn("已回滚 Redis 库存: templateId={}", templateId);
     }
 

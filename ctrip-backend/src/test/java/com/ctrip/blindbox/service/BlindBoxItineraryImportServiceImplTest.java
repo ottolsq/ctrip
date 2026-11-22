@@ -164,6 +164,31 @@ class BlindBoxItineraryImportServiceImplTest {
     }
 
     @Test
+    @DisplayName("已导入行程被删除：清理标记并重新导入")
+    void import_staleMarker_shouldClearAndReimport() throws Exception {
+        when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
+        when(resultMapper.selectOne(any()))
+                .thenReturn(result(validResultText(), 50L))
+                .thenReturn(result(validResultText(), null));
+        when(itineraryService.getDetail(50L, 1L))
+                .thenThrow(new com.ctrip.common.exception.ResourceNotFoundException("gone"));
+        mockLock();
+        when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
+                .thenReturn(itineraryResponse(99L));
+        when(itineraryService.getDetail(99L, 1L)).thenReturn(itineraryResponse(99L));
+        when(itineraryService.addItem(anyLong(), anyLong(), eq(1L), any()))
+                .thenReturn(new ItineraryItemResponse(
+                        1L, 11L, "ATTRACTION", "西湖", "", "上午", "", 1));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        ItineraryResponse response = importService.importItinerary(1L, "BB202611220001");
+
+        assertThat(response.id()).isEqualTo(99L);
+        verify(resultMapper, org.mockito.Mockito.times(2))
+                .update(any(), any(LambdaUpdateWrapper.class));
+    }
+
+    @Test
     @DisplayName("未开盒订单拒绝")
     void import_notOpened_shouldThrow() {
         when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.PAID, 1L));

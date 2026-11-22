@@ -106,7 +106,7 @@ public class BlindBoxResultServiceImpl implements BlindBoxResultService {
         BlindBoxOrder order = orderMapper.selectById(result.getOrderId());
         String orderNo = order != null ? order.getOrderNo() : null;
 
-        return ResultConverter.toResponse(result, orderNo);
+        return ResultConverter.toSharedResponse(result, orderNo);
     }
 
     // ========== 私有辅助 ==========

@@ -86,7 +86,13 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
         }
         BlindBoxResult result = requireResult(order.getId());
         if (result.getImportedItineraryId() != null) {
-            return itineraryService.getDetail(result.getImportedItineraryId(), userId);
+            ItineraryResponse existing = existingItinerary(
+                    result.getImportedItineraryId(), userId);
+            if (existing != null) {
+                return existing;
+            }
+            clearImportedMarker(result.getId(), result.getImportedItineraryId());
+            result.setImportedItineraryId(null);
         }
 
         RLock lock = redissonClient.getLock(LOCK_PREFIX + result.getId());
@@ -102,7 +108,13 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
                                 .eq(BlindBoxResult::getId, result.getId())
                                 .last("FOR UPDATE"));
                 if (latest != null && latest.getImportedItineraryId() != null) {
-                    return itineraryService.getDetail(latest.getImportedItineraryId(), userId);
+                    ItineraryResponse existing = existingItinerary(
+                            latest.getImportedItineraryId(), userId);
+                    if (existing != null) {
+                        return existing;
+                    }
+                    clearImportedMarker(latest.getId(), latest.getImportedItineraryId());
+                    latest.setImportedItineraryId(null);
                 }
                 ItineraryResponse itinerary = doImport(userId, latest != null ? latest : result);
                 int updated = resultMapper.update(null, new LambdaUpdateWrapper<BlindBoxResult>()
@@ -280,6 +292,24 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
 
     private String limit(String value, int maxLength) {
         return value.length() > maxLength ? value.substring(0, maxLength) : value;
+    }
+
+    /**
+     * 已导入行程被删除时返回 null，允许重新导入。
+     */
+    private ItineraryResponse existingItinerary(Long itineraryId, Long userId) {
+        try {
+            return itineraryService.getDetail(itineraryId, userId);
+        } catch (ResourceNotFoundException e) {
+            return null;
+        }
+    }
+
+    private void clearImportedMarker(Long resultId, Long itineraryId) {
+        resultMapper.update(null, new LambdaUpdateWrapper<BlindBoxResult>()
+                .eq(BlindBoxResult::getId, resultId)
+                .eq(BlindBoxResult::getImportedItineraryId, itineraryId)
+                .set(BlindBoxResult::getImportedItineraryId, null));
     }
 
     private BlindBoxOrder requireOrder(String orderNo, Long userId) {
