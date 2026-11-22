@@ -15,6 +15,7 @@ import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.AdminBlindBoxOrderService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
 import com.ctrip.common.tx.AfterCommitExecutor;
@@ -49,17 +50,20 @@ public class AdminBlindBoxOrderServiceImpl implements AdminBlindBoxOrderService 
     private final BlindBoxResultMapper resultMapper;
     private final UserMapper userMapper;
     private final EventPublisher eventPublisher;
+    private final FlashSaleService flashSaleService;
 
     public AdminBlindBoxOrderServiceImpl(BlindBoxOrderMapper orderMapper,
                                          BlindBoxTemplateMapper templateMapper,
                                          BlindBoxResultMapper resultMapper,
                                          UserMapper userMapper,
-                                         EventPublisher eventPublisher) {
+                                         EventPublisher eventPublisher,
+                                         FlashSaleService flashSaleService) {
         this.orderMapper = orderMapper;
         this.templateMapper = templateMapper;
         this.resultMapper = resultMapper;
         this.userMapper = userMapper;
         this.eventPublisher = eventPublisher;
+        this.flashSaleService = flashSaleService;
     }
 
     @Override
@@ -145,6 +149,7 @@ public class AdminBlindBoxOrderServiceImpl implements AdminBlindBoxOrderService 
         BlindBoxTemplate template = templateMapper.selectById(order.getTemplateId());
         if (template != null && template.getType() == BlindBoxType.LIMITED) {
             templateMapper.incrementStock(template.getId());
+            flashSaleService.onStockRestored(template.getId());
         }
 
         AfterCommitExecutor.run(() -> {

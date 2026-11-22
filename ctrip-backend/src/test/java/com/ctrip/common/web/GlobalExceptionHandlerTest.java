@@ -57,6 +57,16 @@ class GlobalExceptionHandlerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("请求体格式错误")));
     }
 
+    @Test
+    @DisplayName("静态资源不存在：返回 404")
+    void missingResource_shouldReturn404() throws Exception {
+        MockMvc mockMvc = mockMvc(new MissingResourceController());
+
+        mockMvc.perform(get("/test-missing"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("资源不存在")));
+    }
+
     private MockMvc mockMvc(Object controller) {
         return MockMvcBuilders
                 .standaloneSetup(controller)
@@ -69,6 +79,15 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test-denied")
         public void denied() {
             throw new AccessDeniedException("Access Denied");
+        }
+    }
+
+    @RestController
+    static class MissingResourceController {
+        @GetMapping("/test-missing")
+        public void missing() throws Exception {
+            throw new org.springframework.web.servlet.resource.NoResourceFoundException(
+                    org.springframework.http.HttpMethod.GET, "missing");
         }
     }
 

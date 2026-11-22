@@ -1,6 +1,7 @@
 package com.ctrip.blindbox.prize;
 
 import com.ctrip.blindbox.dto.ProbabilityResponse;
+import com.ctrip.blindbox.dto.TierProbabilityResponse;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.content.entity.Destination;
 import com.ctrip.content.mapper.DestinationMapper;
@@ -16,6 +17,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -121,6 +123,28 @@ class BlindBoxPrizeServiceImplTest {
         assertThat(response.tiers().get(1).tier()).isEqualTo("LEGENDARY");
         assertThat(response.tiers().get(1).probability()).isEqualByComparingTo("6.67");
         assertThat(response.tiers().get(1).destinations()).containsExactly("巴厘岛");
+    }
+
+    @Test
+    @DisplayName("公示概率：非整除权重合计仍为 100%")
+    void getProbabilities_shouldSumTo100() {
+        properties.setTiers(List.of(
+                tier(PrizeTier.COMMON, 1, List.of(1L)),
+                tier(PrizeTier.RARE, 1, List.of(4L)),
+                tier(PrizeTier.LEGENDARY, 1, List.of(5L))));
+        when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(
+                destination(1L, "杭州"), destination(4L, "京都"), destination(5L, "巴厘岛")));
+
+        ProbabilityResponse response = service(0.0).getProbabilities();
+
+        BigDecimal sum = response.tiers().stream()
+                .map(TierProbabilityResponse::probability)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(sum).isEqualByComparingTo("100.00");
+        assertThat(response.tiers()).extracting(TierProbabilityResponse::probability)
+                .containsExactly(
+                        new BigDecimal("33.33"), new BigDecimal("33.33"),
+                        new BigDecimal("33.34"));
     }
 
     @Test

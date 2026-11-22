@@ -112,6 +112,9 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
 
         // 2. 限定盲盒：检查活动窗口 + 库存 + 分布式锁扣减
         if (template.getType() == BlindBoxType.LIMITED) {
+            if (flashSaleService.getRemainingStock(template.getId()) >= 0) {
+                throw new BusinessException("限时抢购中，请使用秒杀入口");
+            }
             BlindBoxRuleConfigParser.ensureActive(template.getRuleConfig(), LocalDateTime.now());
             if (template.getStock() == null || template.getStock() <= 0) {
                 throw new BusinessException("库存不足");

@@ -70,18 +70,24 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
                 .mapToInt(PrizeProperties.TierConfig::getWeight)
                 .sum();
 
-        List<TierProbabilityResponse> responses = available.stream()
-                .map(tier -> {
-                    List<Destination> destinations = destinationsFor(tier);
-                    BigDecimal probability = totalWeight == 0
-                            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-                            : BigDecimal.valueOf(tier.getWeight() * 100.0 / totalWeight)
-                                    .setScale(2, RoundingMode.HALF_UP);
-                    return new TierProbabilityResponse(
-                            tier.getTier().name(), probability,
-                            destinations.stream().map(Destination::getName).toList());
-                })
-                .toList();
+        List<TierProbabilityResponse> responses = new ArrayList<>();
+        BigDecimal accumulated = BigDecimal.ZERO;
+        for (int i = 0; i < available.size(); i++) {
+            PrizeProperties.TierConfig tier = available.get(i);
+            List<Destination> destinations = destinationsFor(tier);
+            BigDecimal probability;
+            if (i == available.size() - 1) {
+                // 最后一档取 100 减去前面档位，保证展示合计恰好 100%
+                probability = BigDecimal.valueOf(100).subtract(accumulated);
+            } else {
+                probability = BigDecimal.valueOf(tier.getWeight() * 100.0 / totalWeight)
+                        .setScale(2, RoundingMode.HALF_UP);
+                accumulated = accumulated.add(probability);
+            }
+            responses.add(new TierProbabilityResponse(
+                    tier.getTier().name(), probability,
+                    destinations.stream().map(Destination::getName).toList()));
+        }
 
         return new ProbabilityResponse(
                 responses, properties.getGuaranteeCount(), properties.getProbabilityVersion());

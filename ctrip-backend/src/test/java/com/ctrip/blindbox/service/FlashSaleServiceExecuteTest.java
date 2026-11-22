@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -43,6 +44,8 @@ class FlashSaleServiceExecuteTest {
     private StringRedisTemplate redisTemplate;
     @Mock
     private ValueOperations<String, String> valueOperations;
+    @Mock
+    private SetOperations<String, String> setOperations;
     @Mock
     private RabbitTemplate rabbitTemplate;
     @Mock
@@ -108,6 +111,62 @@ class FlashSaleServiceExecuteTest {
         assertThat(message.departureCity()).isEqualTo("杭州");
         assertThat(message.budgetLevel()).isEqualTo("STANDARD");
         assertThat(message.theme()).isEqualTo("美食");
+    }
+
+    @Test
+    @DisplayName("库存不足：返回 SOLD_OUT")
+    void execute_soldOut_shouldReturnStatus() {
+        when(templateMapper.selectById(9L)).thenReturn(
+                template(BlindBoxType.LIMITED, TemplateStatus.ACTIVE, -1, 2));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("seckill:stock:9")).thenReturn("5");
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(0L);
+
+        FlashSaleService.FlashSaleResult result = service.execute(1L, request());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status()).isEqualTo("SOLD_OUT");
+    }
+
+    @Test
+    @DisplayName("重复购买：返回 DUPLICATED")
+    void execute_duplicate_shouldReturnStatus() {
+        when(templateMapper.selectById(9L)).thenReturn(
+                template(BlindBoxType.LIMITED, TemplateStatus.ACTIVE, -1, 2));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("seckill:stock:9")).thenReturn("5");
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(-1L);
+
+        FlashSaleService.FlashSaleResult result = service.execute(1L, request());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status()).isEqualTo("DUPLICATED");
+    }
+
+    @Test
+    @DisplayName("MQ 发送失败：回滚 Redis 库存与用户标记")
+    void execute_mqFailure_shouldRollbackReservation() {
+        when(templateMapper.selectById(9L)).thenReturn(
+                template(BlindBoxType.LIMITED, TemplateStatus.ACTIVE, -1, 2));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get("seckill:stock:9")).thenReturn("5");
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(1L);
+        when(valueOperations.increment(anyString())).thenReturn(1L);
+        when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                .thenReturn(true);
+        when(orderMapper.selectCount(any())).thenReturn(0L);
+        org.mockito.Mockito.doThrow(new RuntimeException("mq down"))
+                .when(rabbitTemplate).convertAndSend(anyString(), anyString(), any(Object.class));
+
+        assertThatThrownBy(() -> service.execute(1L, request()))
+                .isInstanceOf(BusinessException.class);
+
+        verify(valueOperations).increment("seckill:stock:9");
+        verify(setOperations).remove("seckill:users:9", "1");
     }
 
     @Test

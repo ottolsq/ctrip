@@ -16,6 +16,7 @@ import com.ctrip.blindbox.entity.enums.TemplateStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxResultMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.blindbox.service.impl.AdminBlindBoxOrderServiceImpl;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.messaging.publisher.EventPublisher;
@@ -66,6 +67,8 @@ class AdminBlindBoxOrderServiceImplTest {
     private UserMapper userMapper;
     @Mock
     private EventPublisher eventPublisher;
+    @Mock
+    private FlashSaleService flashSaleService;
 
     private AdminBlindBoxOrderServiceImpl service;
 
@@ -82,7 +85,8 @@ class AdminBlindBoxOrderServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AdminBlindBoxOrderServiceImpl(
-                orderMapper, templateMapper, resultMapper, userMapper, eventPublisher);
+                orderMapper, templateMapper, resultMapper, userMapper, eventPublisher,
+                flashSaleService);
     }
 
     @AfterEach

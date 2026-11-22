@@ -95,6 +95,21 @@ class FlashSaleOrderConsumerTest {
     }
 
     @Test
+    @DisplayName("旧格式消息：写入兜底偏好，保证可开盒")
+    void onCreate_oldMessageWithoutPreference_shouldUseFallback() {
+        when(orderMapper.selectOne(any())).thenReturn(null);
+        mockRedis(true);
+        when(templateMapper.decrementStock(9L)).thenReturn(1);
+        when(templateMapper.selectById(9L)).thenReturn(BlindBoxTemplate.builder()
+                .id(9L).price(new BigDecimal("88.00")).build());
+
+        consumer.onCreateOrder(FlashSaleMessage.of(1L, 9L, "BB202611220002"));
+
+        verify(preferenceService).savePreference(
+                any(), eq("未知"), eq("STANDARD"), eq(null));
+    }
+
+    @Test
     @DisplayName("扣库存后失败：补偿一次并转死信")
     void onCreate_failureAfterDeduct_shouldCompensateOnceAndReject() {
         when(orderMapper.selectOne(any())).thenReturn(null);
