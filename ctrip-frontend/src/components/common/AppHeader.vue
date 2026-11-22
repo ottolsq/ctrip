@@ -2,13 +2,13 @@
   <header class="app-header">
     <div class="header-container">
       <!-- Logo -->
-      <div class="logo" @click="router.push('/')">
+      <router-link to="/" class="logo">
         <el-icon :size="24"><Compass /></el-icon>
         <span class="logo-text">趣行旅行平台</span>
-      </div>
+      </router-link>
 
       <!-- 导航菜单 -->
-      <nav class="nav-menu">
+      <nav class="nav-menu" aria-label="主导航">
         <router-link to="/" class="nav-item">首页</router-link>
         <router-link to="/destinations" class="nav-item">目的地</router-link>
         <router-link to="/guides" class="nav-item">攻略</router-link>
@@ -132,7 +132,7 @@ const handleCommand = async (command) => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  color: #409eff;
+  color: #174a5a;
 }
 
 .logo-text {
@@ -157,21 +157,21 @@ const handleCommand = async (command) => {
 
 .nav-item:hover,
 .nav-item.router-link-exact-active {
-  color: #409eff;
-  border-bottom-color: #409eff;
+  color: #174a5a;
+  border-bottom-color: #174a5a;
 }
 
 .blind-box-entry {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #e6a23c;
+  color: #83501a;
 }
 
 .blind-box-entry:hover,
 .blind-box-entry.router-link-exact-active {
-  color: #e6a23c;
-  border-bottom-color: #e6a23c;
+  color: #83501a;
+  border-bottom-color: #83501a;
 }
 
 .header-actions {
@@ -190,5 +190,16 @@ const handleCommand = async (command) => {
 .username {
   font-size: 14px;
   color: #333;
+}
+
+.app-header :is(a, button, [tabindex]):focus-visible { outline: 2px solid #206681; outline-offset: 2px; }
+
+@media (max-width: 840px) {
+  .header-container { display: grid; grid-template-columns: minmax(0, 1fr) auto; height: auto; padding: 8px 16px 0; }
+  .header-actions { justify-self: end; gap: 4px; }
+  .nav-menu { grid-row: 2; grid-column: 1 / -1; justify-content: space-between; gap: 4px; }
+  .nav-item { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 44px; white-space: nowrap; }
+  .logo-text, .username { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .username { max-width: 20vw; }
 }
 </style>

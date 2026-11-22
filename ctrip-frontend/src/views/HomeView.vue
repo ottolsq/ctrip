@@ -1,11 +1,18 @@
 <template>
   <div class="home">
+    <section class="home-hero" aria-labelledby="home-title">
+      <div class="home-intro">
+        <h1 id="home-title">下一站，去哪里？</h1>
+        <p>从想去的地方开始，也可以把目的地交给旅行盲盒。</p>
+        <router-link to="/destinations" class="home-action">探索目的地 →</router-link>
+      </div>
     <!-- 轮播 Banner：无启用数据时隐藏 -->
     <el-carousel
       v-if="banners.length"
       class="banner-carousel"
-      :interval="4000"
-      arrow="always"
+      :autoplay="false"
+      :arrow="banners.length > 1 ? 'always' : 'never'"
+      :indicator-position="banners.length > 1 ? '' : 'none'"
     >
       <el-carousel-item v-for="banner in banners" :key="banner.id">
         <div
@@ -24,34 +31,35 @@
         </div>
       </el-carousel-item>
     </el-carousel>
+    </section>
 
     <!-- 盲盒快捷入口 -->
     <div class="blind-box-entry-section">
-      <div class="section-card blind-box-card" @click="router.push('/blind-box')">
+      <div class="section-card blind-box-card">
         <div class="bb-card-inner">
-          <el-icon :size="48" color="#fff"><Present /></el-icon>
+          <el-icon :size="28"><Present /></el-icon>
           <h3>旅行盲盒</h3>
           <p>未知的目的地，惊喜的旅程</p>
-          <el-button type="warning" round @click.stop="router.push('/blindbox')">立即开启</el-button>
+          <router-link to="/blind-box" class="home-action">立即开启</router-link>
         </div>
       </div>
-      <div class="section-card guide-card" @click="router.push('/guides')">
+      <div class="section-card guide-card">
         <div class="bb-card-inner">
-          <el-icon :size="48" color="#fff"><Reading /></el-icon>
+          <el-icon :size="28"><Reading /></el-icon>
           <h3>旅行攻略</h3>
           <p>精选旅行攻略，灵感源泉</p>
           <div class="card-actions">
-            <el-button type="primary" round @click.stop="router.push('/guides')">浏览攻略</el-button>
-            <el-button type="success" round @click.stop="router.push('/guides/create')">发布攻略</el-button>
+            <router-link to="/guides" class="home-action">浏览攻略</router-link>
+            <router-link to="/guides/create" class="home-action">发布攻略</router-link>
           </div>
         </div>
       </div>
-      <div class="section-card itinerary-card" @click="router.push('/itineraries')">
+      <div class="section-card itinerary-card">
         <div class="bb-card-inner">
-          <el-icon :size="48" color="#fff"><MapLocation /></el-icon>
+          <el-icon :size="28"><MapLocation /></el-icon>
           <h3>行程规划</h3>
           <p>一键规划你的完美旅程</p>
-          <el-button type="success" round>开始规划</el-button>
+          <router-link to="/itineraries" class="home-action">开始规划</router-link>
         </div>
       </div>
     </div>
@@ -62,9 +70,10 @@
         <h2>热门目的地</h2>
         <router-link to="/destinations" class="section-more">查看全部 &gt;</router-link>
       </div>
+      <p v-if="!hotDestinations.length" class="section-status" role="status">{{ sectionMessage('destinations', '热门目的地') }}</p>
       <el-row :gutter="20">
-        <el-col v-for="item in hotDestinations" :key="item.id" :span="6">
-          <div class="destination-card" @click="router.push(`/destinations/${item.id}`)">
+        <el-col v-for="item in hotDestinations" :key="item.id" :xs="12" :sm="12" :md="6">
+          <router-link class="destination-card" :to="`/destinations/${item.id}`">
             <div class="dest-img-wrapper">
               <el-image :src="item.coverUrl || '/placeholder-dest.jpg'" fit="cover" class="dest-img">
                 <template #error>
@@ -78,7 +87,7 @@
               <h3>{{ item.name }}</h3>
               <p>{{ item.description?.slice(0, 30) || '探索未知的目的地' }}...</p>
             </div>
-          </div>
+          </router-link>
         </el-col>
       </el-row>
     </section>
@@ -125,9 +134,10 @@
         <h2>攻略精选</h2>
         <router-link to="/guides" class="section-more">查看全部 &gt;</router-link>
       </div>
+      <p v-if="!featuredGuides.length" class="section-status" role="status">{{ sectionMessage('guides', '精选攻略') }}</p>
       <el-row :gutter="20">
-        <el-col v-for="item in featuredGuides" :key="item.id" :span="8">
-          <div class="guide-card-h" @click="router.push(`/guides/${item.id}`)">
+        <el-col v-for="item in featuredGuides" :key="item.id" :xs="24" :sm="12" :md="8">
+          <router-link class="guide-card-h" :to="`/guides/${item.id}`">
             <div class="guide-img-wrapper">
               <el-image :src="item.coverUrl || '/placeholder-guide.jpg'" fit="cover" class="guide-img">
                 <template #error>
@@ -145,7 +155,7 @@
                 <span><el-icon :size="12"><View /></el-icon> {{ item.viewCount || 0 }}</span>
               </div>
             </div>
-          </div>
+          </router-link>
         </el-col>
       </el-row>
     </section>
@@ -153,7 +163,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDestinations } from '@/api/destination'
 import { getGuides } from '@/api/guide'
@@ -166,6 +176,7 @@ const banners = ref([])
 const recommendations = ref([])
 const hotDestinations = ref([])
 const featuredGuides = ref([])
+const sectionStatus = reactive({ destinations: 'loading', guides: 'loading' })
 
 function handleLinkClick(linkUrl) {
   if (!linkUrl) return
@@ -176,36 +187,26 @@ function handleLinkClick(linkUrl) {
   router.push(linkUrl)
 }
 
-onMounted(async () => {
-  try {
-    const bannerRes = await getPublicBanners()
-    banners.value = bannerRes.data || []
-  } catch {
-    banners.value = []
-  }
+function sectionMessage(key, label) {
+  if (sectionStatus[key] === 'loading') return `正在加载${label}…`
+  if (sectionStatus[key] === 'error') return `${label}暂时无法加载，请稍后重试。`
+  return `暂无${label}。`
+}
 
+async function loadSection(key, request, items) {
   try {
-    const recommendationRes = await getPublicRecommendations('home_featured')
-    recommendations.value = recommendationRes.data || []
+    items.value = (await request()).data?.records || []
+    sectionStatus[key] = 'ready'
   } catch {
-    recommendations.value = []
+    sectionStatus[key] = 'error'
   }
+}
 
-  try {
-    const destRes = await getDestinations({ current: 1, size: 4 })
-    hotDestinations.value = destRes.data?.records || []
-  } catch {
-    // 接口暂未实现，使用空数据
-    hotDestinations.value = []
-  }
-
-  try {
-    const guideRes = await getGuides({ current: 1, size: 3 })
-    featuredGuides.value = guideRes.data?.records || []
-  } catch {
-    // 接口暂未实现，使用空数据
-    featuredGuides.value = []
-  }
+onMounted(() => {
+  getPublicBanners().then(({ data }) => { banners.value = data || [] }).catch(() => {})
+  getPublicRecommendations('home_featured').then(({ data }) => { recommendations.value = data || [] }).catch(() => {})
+  loadSection('destinations', () => getDestinations({ current: 1, size: 4 }), hotDestinations)
+  loadSection('guides', () => getGuides({ current: 1, size: 3 }), featuredGuides)
 })
 </script>
 
@@ -214,14 +215,33 @@ onMounted(async () => {
   padding: 0 0 40px;
 }
 
+.home-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+  align-items: center;
+  margin-bottom: 24px;
+  border-radius: 18px;
+  overflow: hidden;
+  color: #fff;
+  background: #153d4b;
+}
+
+.home-intro { padding: clamp(24px, 5vw, 56px); }
+.home-intro h1 { font-size: clamp(28px, 4vw, 52px); line-height: 1.2; }
+.home-intro p { margin: 14px 0 22px; line-height: 1.65; color: #dfedf0; }
+.home-action { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 8px; color: #153d4b; background: #e8f2f2; font-weight: 600; }
+.home-action:hover { color: #153d4b; background: #cce4e5; }
+.home-intro .home-action, .blind-box-card .home-action { background: #ffdd9a; }
+.home-intro .home-action:hover, .blind-box-card .home-action:hover { background: #ffcc70; }
+.home :is(a, button):focus-visible { outline: 2px solid #206681; outline-offset: 2px; }
+.home-intro a:focus-visible { outline-color: #ffdd9a; }
+.section-status { padding: 16px; border: 1px solid #d5e2e6; border-radius: 10px; color: #425b67; background: #fff; }
+
 /* Banner */
 .banner-carousel {
-  border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 32px;
-  height: 400px;
-  box-shadow: 0 8px 32px rgba(64, 158, 255, 0.15);
-  background: transparent;
+  height: clamp(180px, 27vw, 340px);
+  min-width: 0;
 }
 
 .banner-carousel :deep(.el-carousel__container) {
@@ -295,9 +315,11 @@ onMounted(async () => {
   z-index: 1;
   text-align: center;
   color: #fff;
-  padding: 0 24px;
+  padding: 8px 16px;
+  max-width: 65%;
+  border-radius: 8px;
+  background: #153d4be6;
   text-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-  animation: fadeInUp 0.6s ease;
 }
 
 @keyframes fadeInUp {
@@ -312,9 +334,9 @@ onMounted(async () => {
 }
 
 .banner-content h2 {
-  font-size: 44px;
+  font-size: clamp(20px, 3vw, 36px);
   font-weight: 700;
-  margin-bottom: 16px;
+  overflow-wrap: anywhere;
   text-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   background: linear-gradient(135deg, #fff 0%, #e6f3ff 100%);
   -webkit-background-clip: text;
@@ -332,7 +354,7 @@ onMounted(async () => {
 /* 快捷入口 */
 .blind-box-entry-section {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 212px), 1fr));
   gap: 20px;
   margin-bottom: 48px;
 }
@@ -340,9 +362,8 @@ onMounted(async () => {
 .section-card {
   border-radius: 20px;
   overflow: hidden;
-  cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
-  min-height: 220px;
+  min-height: 170px;
   position: relative;
 }
 
@@ -359,25 +380,24 @@ onMounted(async () => {
 }
 
 .blind-box-card {
-  background: linear-gradient(135deg, #409eff, #66b1ff);
+  background: #ffefd0;
 }
 
 .guide-card {
-  background: linear-gradient(135deg, #72c1ff, #9fd6ff);
+  background: #fff;
 }
 
 .itinerary-card {
-  background: linear-gradient(135deg, #a5d8ff, #c7e4ff);
+  background: #fff;
 }
 
 .bb-card-inner {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 40px 20px;
-  color: #fff;
-  text-align: center;
+  padding: 22px;
+  color: #153d4b;
   position: relative;
   z-index: 1;
 }
@@ -386,7 +406,7 @@ onMounted(async () => {
   font-size: 22px;
   font-weight: 700;
   margin: 16px 0 8px;
-  color: #fff;
+  color: #153d4b;
 }
 
 .bb-card-inner p {
@@ -397,9 +417,12 @@ onMounted(async () => {
 
 .card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
 }
+
+.destination-card, .guide-card-h { display: block; margin-bottom: 14px; }
 
 /* 通用分区 */
 .section {
@@ -435,7 +458,7 @@ onMounted(async () => {
 
 .section-more {
   font-size: 14px;
-  color: var(--primary-color);
+  color: #206681;
   text-decoration: none;
   padding: 6px 16px;
   border-radius: 20px;
