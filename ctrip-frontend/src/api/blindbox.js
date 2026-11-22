@@ -40,6 +40,13 @@ export function importBlindBoxItinerary(orderNo) {
 }
 
 /**
+ * 限定盲盒秒杀抢购
+ */
+export function flashSaleBlindBox(data) {
+  return request.post('/v1/blind-box/flash-sale', data)
+}
+
+/**
  * 我的盲盒列表
  */
 export function getMyBlindBoxes(params) {

@@ -160,6 +160,7 @@ npm run dev
 - `scripts/run_all_e2e.py`：一键运行全部 API E2E（含 429 重试）
 - `scripts/stress_blindbox.py`：LIMITED 库存并发压测脚本
 - `scripts/e2e_admin_p3.py`：P3 概率/保底/抽取记录 API 级端到端验证脚本
+- `scripts/e2e_flash_sale.py`：限定盲盒秒杀链路 API 级端到端验证脚本
 - `other/p2_acceptance.md`：P2 测试、压测与部署验收记录
 - 仓库根目录 `deploy/DEPLOYMENT.md`：jar + WSL nginx 部署试运行说明
 

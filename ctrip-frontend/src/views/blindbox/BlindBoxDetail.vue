@@ -161,7 +161,8 @@ function formatDateTime(value) {
 
 function handleBuy() {
   if (soldOut.value) return
-  router.push(`/blind-box/${route.params.id}/order`)
+  const suffix = isLimited.value ? '?flash=1' : ''
+  router.push(`/blind-box/${route.params.id}/order${suffix}`)
 }
 
 onMounted(async () => {

@@ -1045,6 +1045,29 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 
 ---
 
+## 秒杀接口
+
+### 限定盲盒抢购
+
+`POST /api/v1/blind-box/flash-sale`（需登录）
+
+```json
+{
+  "templateId": 1,
+  "departureCity": "杭州",
+  "budgetLevel": "STANDARD",
+  "theme": "美食"
+}
+```
+
+- 仅 `LIMITED` 且上架、活动窗口内的模板；
+- Redis Lua 原子预扣库存（未预热时自动从 MySQL 加载），成功后发送 MQ 异步创建 `PAID` 订单；
+- 返回 `{ success, status, orderNo, message }`：
+  - `QUEUED`：抢购成功，订单异步创建；
+  - `SOLD_OUT`：已售罄；
+  - `DUPLICATED`：同一用户同一模板已抢购；
+- 异步消费者会保存出发城市/预算/主题，开盒流程可直接使用。
+
 ## 合规接口（P3）
 
 ### 概率公示

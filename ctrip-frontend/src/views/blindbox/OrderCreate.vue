@@ -102,7 +102,7 @@
             :loading="submitLoading"
             @click="handleSubmit"
           >
-            提交订单
+            {{ isFlash ? '立即抢购' : '提交订单' }}
           </el-button>
         </el-card>
       </el-col>
@@ -111,9 +111,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBlindBoxTemplate, createBlindBoxOrder } from '@/api/blindbox'
+import {
+  getBlindBoxTemplate,
+  createBlindBoxOrder,
+  flashSaleBlindBox,
+  getMyBlindBoxes
+} from '@/api/blindbox'
 import { Box } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { ruleDescription } from '@/utils/businessRules'
@@ -125,6 +130,7 @@ const formRef = ref(null)
 const loading = ref(false)
 const submitLoading = ref(false)
 const template = ref(null)
+const isFlash = computed(() => route.query.flash === '1')
 
 const form = reactive({
   departureCity: '',
@@ -166,6 +172,10 @@ const handleSubmit = async () => {
 
   submitLoading.value = true
   try {
+    if (isFlash.value) {
+      await handleFlashSale()
+      return
+    }
     const res = await createBlindBoxOrder({
       templateId: parseInt(route.params.id),
       departureCity: form.departureCity,
@@ -192,6 +202,37 @@ const handleSubmit = async () => {
   } finally {
     submitLoading.value = false
   }
+}
+
+async function handleFlashSale() {
+  const result = await flashSaleBlindBox({
+    templateId: parseInt(route.params.id),
+    departureCity: form.departureCity,
+    budgetLevel: form.budgetLevel,
+    theme: form.theme || undefined
+  })
+  const data = result.data
+  if (!data?.success) {
+    ElMessage.warning(data?.message || '抢购失败')
+    return
+  }
+
+  const orderNo = data.orderNo
+  ElMessage.success('抢购成功，正在生成订单...')
+  for (let i = 0; i < 20; i++) {
+    await new Promise(resolve => setTimeout(resolve, 500))
+    try {
+      const res = await getMyBlindBoxes({ page: 1, size: 20 })
+      if ((res.data?.records || []).some(item => item.orderNo === orderNo)) {
+        router.push(`/blind-box/orders/${orderNo}/open`)
+        return
+      }
+    } catch {
+      // 继续轮询
+    }
+  }
+  ElMessage.info('订单生成中，请稍后在「我的盲盒」查看')
+  router.push('/blind-box/my')
 }
 
 onMounted(() => {

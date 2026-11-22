@@ -141,7 +141,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**177/177 通过**（P3 + 一键导入行程测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**181/181 通过**（P3 + 导入 + 秒杀入口测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -261,6 +261,14 @@ wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/otto
 ```
 
 `e2e_p0.py` 已覆盖开盒 → 导入行程 → 重复导入幂等 → 行程天/明细校验。
+
+### 7.9 限时抢购 E2E
+
+```bash
+python -I ctrip-backend/scripts/e2e_flash_sale.py
+```
+
+覆盖：限定模板创建 → Lua 抢购 → MQ 异步 PAID 订单 → 重复购买拒绝 → 售罄 → 开盒（验证偏好已保存）。
 
 ## 8. 安全说明
 
