@@ -8,7 +8,7 @@
 
       <!-- 步骤条 -->
       <el-steps :active="step" align-center class="steps">
-        <el-step title="验证手机" />
+        <el-step title="获取验证码" />
         <el-step title="重置密码" />
         <el-step title="完成" />
       </el-steps>
@@ -20,7 +20,7 @@
         size="large"
         @submit.prevent
       >
-        <!-- 步骤1: 验证手机 -->
+        <!-- 步骤1: 获取验证码 -->
         <template v-if="step === 0">
           <el-form-item prop="phone">
             <el-input
@@ -31,12 +31,28 @@
             />
           </el-form-item>
 
-          <el-form-item prop="verifyCode">
+          <el-form-item>
+            <el-button
+              type="primary"
+              @click="handleSendCode"
+              :loading="smsLoading"
+              class="action-btn"
+            >
+              发送验证码
+            </el-button>
+          </el-form-item>
+        </template>
+
+        <!-- 步骤2: 重置密码 -->
+        <template v-if="step === 1">
+          <el-form-item prop="otp">
             <div class="code-input">
               <el-input
-                v-model="form.verifyCode"
+                v-model="form.otp"
                 placeholder="6位验证码"
                 :prefix-icon="Key"
+                inputmode="numeric"
+                autocomplete="one-time-code"
                 clearable
               />
               <el-button
@@ -47,30 +63,16 @@
                 @click="handleSendCode"
                 class="sms-btn"
               >
-                {{ smsCountdown > 0 ? `${smsCountdown}s` : '发送验证码' }}
+                {{ smsCountdown > 0 ? `${smsCountdown}s` : '重新发送' }}
               </el-button>
             </div>
           </el-form-item>
 
-          <el-form-item>
-            <el-button
-              type="primary"
-              @click="handleVerify"
-              :loading="verifyLoading"
-              class="action-btn"
-            >
-              下一步
-            </el-button>
-          </el-form-item>
-        </template>
-
-        <!-- 步骤2: 重置密码 -->
-        <template v-if="step === 1">
           <el-form-item prop="password">
             <el-input
               v-model="form.password"
               type="password"
-              placeholder="请设置新密码（至少6位）"
+              placeholder="请设置新密码（8～64位）"
               :prefix-icon="Lock"
               show-password
               clearable
@@ -121,9 +123,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { sendSmsCode, forgotPassword, resetPassword } from '@/api/auth'
+import { forgotPassword, resetPassword } from '@/api/auth'
 import { Phone, Lock, Key, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -133,13 +135,12 @@ const formRef = ref(null)
 const step = ref(0)
 const smsLoading = ref(false)
 const smsCountdown = ref(0)
-const verifyLoading = ref(false)
 const resetLoading = ref(false)
 let countdownTimer = null
 
 const form = reactive({
   phone: '',
-  verifyCode: '',
+  otp: '',
   password: '',
   confirmPassword: ''
 })
@@ -158,17 +159,17 @@ const formRules = computed(() => {
       phone: [
         { required: true, message: '请输入手机号', trigger: 'blur' },
         { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
-      ],
-      verifyCode: [
-        { required: true, message: '请输入验证码', trigger: 'blur' },
-        { pattern: /^\d{6}$/, message: '验证码为6位数字', trigger: 'blur' }
       ]
     }
   }
   return {
+    otp: [
+      { required: true, message: '请输入验证码', trigger: 'blur' },
+      { pattern: /^\d{6}$/, message: '验证码为6位数字', trigger: 'blur' }
+    ],
     password: [
       { required: true, message: '请设置新密码', trigger: 'blur' },
-      { min: 6, message: '密码至少6个字符', trigger: 'blur' }
+      { min: 8, max: 64, message: '密码须为8～64个字符', trigger: 'blur' }
     ],
     confirmPassword: [
       { required: true, message: '请确认新密码', trigger: 'blur' },
@@ -179,15 +180,18 @@ const formRules = computed(() => {
 
 // 发送验证码
 const handleSendCode = async () => {
-  if (!form.phone || !/^1[3-9]\d{9}$/.test(form.phone)) {
-    ElMessage.warning('请先输入正确的手机号')
-    return
-  }
+  if (smsLoading.value || smsCountdown.value > 0) return
 
   smsLoading.value = true
   try {
-    await sendSmsCode(form.phone)
-    ElMessage.success('验证码已发送')
+    if (step.value === 0) {
+      const valid = await formRef.value.validateField('phone').catch(() => false)
+      if (!valid) return
+    }
+    await forgotPassword({ credential: form.phone })
+    if (!formRef.value) return
+    ElMessage.success('若账号存在，验证码已发送')
+    step.value = 1
     smsCountdown.value = 60
     countdownTimer = setInterval(() => {
       smsCountdown.value--
@@ -200,26 +204,6 @@ const handleSendCode = async () => {
   }
 }
 
-// 验证手机
-const handleVerify = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-
-  verifyLoading.value = true
-  try {
-    await forgotPassword({
-      phone: form.phone,
-      verifyCode: form.verifyCode
-    })
-    ElMessage.success('验证通过')
-    step.value = 1
-  } catch (error) {
-    // 错误已处理
-  } finally {
-    verifyLoading.value = false
-  }
-}
-
 // 重置密码
 const handleReset = async () => {
   const valid = await formRef.value.validate().catch(() => false)
@@ -228,11 +212,12 @@ const handleReset = async () => {
   resetLoading.value = true
   try {
     await resetPassword({
-      phone: form.phone,
-      verifyCode: form.verifyCode,
+      credential: form.phone,
+      otp: form.otp,
       newPassword: form.password
     })
     ElMessage.success('密码重置成功')
+    clearInterval(countdownTimer)
     step.value = 2
   } catch (error) {
     // 错误已处理
@@ -240,6 +225,8 @@ const handleReset = async () => {
     resetLoading.value = false
   }
 }
+
+onBeforeUnmount(() => clearInterval(countdownTimer))
 </script>
 
 <style scoped>
