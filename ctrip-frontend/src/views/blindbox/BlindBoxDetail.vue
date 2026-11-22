@@ -8,7 +8,7 @@
 
       <el-card class="main-card" shadow="never">
         <el-row :gutter="24">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <div class="cover-wrapper">
               <el-image :src="template.coverUrl" fit="cover" class="cover-image">
                 <template #error>
@@ -18,11 +18,11 @@
                 </template>
               </el-image>
               <div v-if="template.type === 'DAILY'" class="tag-badge daily">日常盲盒</div>
-            <div v-else-if="template.type === 'LIMITED'" class="tag-badge limited">限定盲盒</div>
+              <div v-else-if="template.type === 'LIMITED'" class="tag-badge limited">限定盲盒</div>
             </div>
           </el-col>
 
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <div class="info-section">
               <h1 class="template-name">{{ template.name }}</h1>
               <div class="price-row">
@@ -31,28 +31,14 @@
                 <span v-if="template.originalPrice" class="original-price">¥{{ template.originalPrice }}</span>
               </div>
 
-              <div class="desc-section">
-                <h4>简介</h4>
-                <p class="description">{{ rule.description || '暂无描述' }}</p>
-              </div>
-
               <div v-if="isLimited" class="limited-info">
                 <div class="info-row">
                   <span class="info-label">剩余库存</span>
-                  <span>{{ template.stock }} 份</span>
+                  <span>{{ soldOut ? '已售罄' : `${template.stock} 份` }}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">活动时间</span>
                   <span>{{ formatDateTime(rule.activityStartTime) }} ~ {{ formatDateTime(rule.activityEndTime) }}</span>
-                </div>
-              </div>
-
-              <div class="rules-section">
-                <h4>规则说明</h4>
-                <div class="rules-content">
-                  <p v-if="rule.description">{{ rule.description }}</p>
-                  <p v-if="isLimited">活动期间限量供应，售罄即止。</p>
-                  <p v-if="!rule.description && !isLimited">暂无规则说明</p>
                 </div>
               </div>
 
@@ -61,6 +47,15 @@
                   <el-icon><ShoppingCart /></el-icon>
                   {{ soldOut ? '已售罄' : '立即购买' }}
                 </el-button>
+              </div>
+
+              <div class="rules-section">
+                <h2>规则说明</h2>
+                <div class="rules-content">
+                  <p v-if="rule.description">{{ rule.description }}</p>
+                  <p v-if="isLimited">活动期间限量供应，售罄即止。</p>
+                  <p v-else-if="!rule.description">暂无规则说明</p>
+                </div>
               </div>
             </div>
           </el-col>
@@ -72,15 +67,15 @@
           <h3>概率公示</h3>
         </template>
         <el-table :data="probabilities.tiers" style="width: 100%">
-          <el-table-column label="档位" width="140">
+          <el-table-column label="档位" min-width="68">
             <template #default="{ row }">
               <el-tag :type="tierTagType(row.tier)" size="small">{{ tierLabel(row.tier) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="概率" width="120">
+          <el-table-column label="概率" min-width="76">
             <template #default="{ row }">{{ Number(row.probability).toFixed(2) }}%</template>
           </el-table-column>
-          <el-table-column label="可能目的地">
+          <el-table-column label="可能目的地" min-width="100">
             <template #default="{ row }">
               {{ row.destinations?.length ? row.destinations.join('、') : '奖品池调整中' }}
             </template>
@@ -101,8 +96,10 @@
     </div>
 
     <div v-else-if="!loading" class="empty-state">
-      <el-empty description="盲盒模板不存在" />
-      <el-button type="primary" @click="router.push('/blind-box')">返回列表</el-button>
+      <el-empty :description="loadFailed ? '盲盒详情暂时无法加载' : '盲盒模板不存在或已下架'">
+        <el-button v-if="loadFailed" type="primary" @click="loadDetail">重新加载</el-button>
+        <el-button @click="router.push('/blind-box')">返回列表</el-button>
+      </el-empty>
     </div>
   </div>
 </template>
@@ -112,12 +109,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getBlindBoxTemplate, getBlindBoxProbabilities } from '@/api/blindbox'
 import { ArrowLeft, Picture, ShoppingCart } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { parseRuleConfig } from '@/utils/businessRules'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
+const loadFailed = ref(false)
 const template = ref(null)
 const probabilities = ref(null)
 
@@ -135,15 +133,6 @@ function tierTagType(tier) {
   if (tier === 'LEGENDARY') return 'danger'
   if (tier === 'RARE') return 'warning'
   return 'info'
-}
-
-function parseRuleConfig(raw) {
-  if (!raw) return {}
-  try {
-    return typeof raw === 'string' ? JSON.parse(raw) : raw
-  } catch {
-    return {}
-  }
 }
 
 const rule = computed(() => parseRuleConfig(template.value?.ruleConfig))
@@ -165,25 +154,30 @@ function handleBuy() {
   router.push(`/blind-box/${route.params.id}/order${suffix}`)
 }
 
-onMounted(async () => {
+async function loadDetail() {
+  loading.value = true
+  loadFailed.value = false
   const id = route.params.id
   try {
     const res = await getBlindBoxTemplate(id)
     template.value = res.data
   } catch (err) {
     template.value = null
-    ElMessage.error('获取盲盒详情失败')
+    loadFailed.value = err.response?.status !== 404
+  } finally {
+    loading.value = false
   }
 
+  if (!template.value) return
   try {
     const probabilityRes = await getBlindBoxProbabilities(id)
     probabilities.value = probabilityRes.data
   } catch {
     probabilities.value = null
-  } finally {
-    loading.value = false
   }
-})
+}
+
+onMounted(loadDetail)
 </script>
 
 <style scoped>
@@ -219,7 +213,7 @@ onMounted(async () => {
 .cover-wrapper {
   position: relative;
   width: 100%;
-  height: 400px;
+  height: clamp(220px, 32vw, 400px);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -241,12 +235,12 @@ onMounted(async () => {
 }
 
 .tag-badge.daily {
-  background: linear-gradient(135deg, #409eff, #667eea);
+  background: #153d4b;
 }
 
 .tag-badge.limited {
-  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
-  animation: pulse 2s infinite;
+  color: #603b14;
+  background: #ffdd9a;
 }
 
 @keyframes pulse {
@@ -277,11 +271,12 @@ onMounted(async () => {
 
 .price-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 12px;
   margin-bottom: 24px;
   padding: 16px;
-  background: #fff7e6;
+  background: #ffefd0;
   border-radius: 8px;
 }
 
@@ -293,7 +288,7 @@ onMounted(async () => {
 .price-value {
   font-size: 32px;
   font-weight: 700;
-  color: #f56c6c;
+  color: #873d20;
 }
 
 .original-price {
@@ -302,13 +297,11 @@ onMounted(async () => {
   text-decoration: line-through;
 }
 
-.desc-section,
 .rules-section {
-  margin-bottom: 20px;
+  margin-top: 20px;
 }
 
-.desc-section h4,
-.rules-section h4 {
+.rules-section h2 {
   font-size: 15px;
   font-weight: 600;
   color: #303133;
@@ -342,12 +335,14 @@ onMounted(async () => {
 .limited-info {
   margin-bottom: 20px;
   padding: 12px;
-  background: #fff1f0;
+  background: #e8f2f2;
   border-radius: 6px;
 }
 
 .info-row {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   justify-content: space-between;
   font-size: 14px;
   color: #606266;
@@ -362,16 +357,22 @@ onMounted(async () => {
 }
 
 .action-section {
-  margin-top: auto;
-  padding-top: 20px;
+  margin-top: 4px;
 }
 
 .buy-btn {
+  --el-button-bg-color: #206681;
+  --el-button-hover-bg-color: #174a5a;
   width: 100%;
   height: 48px;
   font-size: 16px;
   font-weight: 600;
   border-radius: 24px;
+}
+
+@media (max-width: 767px) {
+  .cover-wrapper { height: auto; aspect-ratio: 16 / 9; margin-bottom: 18px; }
+  .template-name { font-size: 24px; }
 }
 
 .detail-card {

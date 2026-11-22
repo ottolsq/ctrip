@@ -1,12 +1,12 @@
 <template>
   <div class="blindbox-list-page">
     <div class="page-header">
-      <h2>盲盒专区</h2>
-      <p>开启未知惊喜，遇见专属旅行</p>
+      <h1>旅行盲盒</h1>
+      <p>日常盲盒随时可选，限定盲盒请留意库存与活动时间。</p>
     </div>
 
     <div class="filter-bar">
-      <el-radio-group v-model="typeFilter" @change="handleTypeChange">
+      <el-radio-group v-model="typeFilter" aria-label="盲盒类型" @change="handleTypeChange">
         <el-radio-button value="">全部</el-radio-button>
         <el-radio-button value="DAILY">日常盲盒</el-radio-button>
         <el-radio-button value="LIMITED">限定盲盒</el-radio-button>
@@ -23,7 +23,7 @@
         class="blindbox-col"
       >
         <div class="blindbox-card">
-          <div class="card-cover" @click="goToDetail(item.id)">
+          <div class="card-cover">
             <el-image :src="item.coverUrl" fit="cover" class="cover-img">
               <template #error>
                 <div class="img-placeholder">
@@ -35,7 +35,7 @@
             <div v-else-if="item.type === 'LIMITED'" class="card-tag limited">限定盲盒</div>
           </div>
           <div class="card-body">
-            <h3 class="card-title" @click="goToDetail(item.id)">{{ item.name }}</h3>
+            <h2 class="card-title">{{ item.name }}</h2>
             <p class="card-desc">{{ getRuleDescription(item) || '暂无描述' }}</p>
             <div class="card-footer">
               <div class="price-wrapper">
@@ -43,18 +43,21 @@
                 <span class="price-value">{{ item.price }}</span>
                 <span class="price-original" v-if="item.originalPrice">¥{{ item.originalPrice }}</span>
               </div>
-              <span v-if="item.type === 'LIMITED' && item.stock >= 0" class="stock-text">
-                剩余 {{ item.stock }} 份
+              <span v-if="item.type === 'LIMITED' && Number.isInteger(item.stock) && item.stock >= 0"
+                class="stock-text" :class="{ 'is-sold-out': item.stock === 0 }">
+                {{ item.stock === 0 ? '已售罄' : `剩余 ${item.stock} 份` }}
               </span>
-              <el-button type="primary" size="small" @click="goToDetail(item.id)">
-                立即购买
-              </el-button>
+              <router-link :to="`/blind-box/${item.id}`" class="detail-link" :aria-label="`查看${item.name}详情`">
+                查看详情
+              </router-link>
             </div>
           </div>
         </div>
       </el-col>
       <el-col v-if="!loading && list.length === 0" :span="24">
-        <el-empty description="暂无盲盒数据" />
+        <el-empty :description="loadFailed ? '盲盒列表暂时无法加载' : '暂无盲盒数据'">
+          <el-button v-if="loadFailed" @click="loadData">重新加载</el-button>
+        </el-empty>
       </el-col>
     </el-row>
 
@@ -64,6 +67,7 @@
         v-model:page-size="pagination.pageSize"
         :total="total"
         :page-sizes="[9, 12, 18, 30]"
+        :pager-count="5"
         layout="total, sizes, prev, pager, next"
         background
         @current-change="loadData"
@@ -75,15 +79,14 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { getBlindBoxTemplates } from '@/api/blindbox'
 import { Box } from '@element-plus/icons-vue'
-
-const router = useRouter()
+import { ruleDescription } from '@/utils/businessRules'
 
 const list = ref([])
 const total = ref(0)
 const loading = ref(false)
+const loadFailed = ref(false)
 const typeFilter = ref('')
 
 const pagination = reactive({
@@ -91,21 +94,13 @@ const pagination = reactive({
   pageSize: 9
 })
 
-function parseRuleConfig(raw) {
-  if (!raw) return {}
-  try {
-    return typeof raw === 'string' ? JSON.parse(raw) : raw
-  } catch {
-    return {}
-  }
-}
-
 function getRuleDescription(item) {
-  return parseRuleConfig(item?.ruleConfig).description || ''
+  return ruleDescription(item?.ruleConfig)
 }
 
 async function loadData() {
   loading.value = true
+  loadFailed.value = false
   try {
     const params = {
       page: pagination.current,
@@ -118,6 +113,7 @@ async function loadData() {
     list.value = res.data.records || []
     total.value = res.data.total || 0
   } catch {
+    loadFailed.value = true
     list.value = []
     total.value = 0
   } finally {
@@ -136,10 +132,6 @@ function handleSizeChange(size) {
   loadData()
 }
 
-function goToDetail(id) {
-  router.push(`/blind-box/${id}`)
-}
-
 onMounted(() => {
   loadData()
 })
@@ -151,20 +143,22 @@ onMounted(() => {
 }
 
 .page-header {
-  margin-bottom: 32px;
-  text-align: center;
+  margin-bottom: 24px;
+  padding: clamp(20px, 4vw, 40px);
+  border-radius: 18px;
+  background: #153d4b;
 }
 
-.page-header h2 {
-  font-size: 32px;
+.page-header h1 {
+  font-size: clamp(28px, 4vw, 40px);
   font-weight: 700;
-  color: var(--text-primary);
+  color: #fff;
   margin-bottom: 12px;
 }
 
 .page-header p {
   font-size: 15px;
-  color: var(--text-muted);
+  color: #dfedf0;
 }
 
 .filter-bar {
@@ -176,6 +170,7 @@ onMounted(() => {
 }
 
 .blindbox-card {
+  position: relative;
   background: #ffffff;
   border-radius: 16px;
   overflow: hidden;
@@ -193,7 +188,6 @@ onMounted(() => {
   position: relative;
   height: 220px;
   overflow: hidden;
-  cursor: pointer;
 }
 
 .cover-img {
@@ -213,12 +207,12 @@ onMounted(() => {
 }
 
 .card-tag.daily {
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+  background: #153d4b;
 }
 
 .card-tag.limited {
-  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
-  animation: pulse 2s infinite;
+  color: #603b14;
+  background: #ffdd9a;
 }
 
 @keyframes pulse {
@@ -242,14 +236,9 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 10px;
-  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.card-title:hover {
-  color: var(--primary-color);
 }
 
 .card-desc {
@@ -266,6 +255,8 @@ onMounted(() => {
 
 .card-footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
 }
@@ -278,35 +269,42 @@ onMounted(() => {
 
 .price-symbol {
   font-size: 15px;
-  color: var(--danger-color);
+  color: #873d20;
   font-weight: 600;
 }
 
 .price-value {
   font-size: 24px;
-  color: var(--danger-color);
+  color: #873d20;
   font-weight: 700;
 }
 
 .price-original {
   font-size: 14px;
-  color: var(--text-light);
+  color: #667781;
   text-decoration: line-through;
   margin-left: 6px;
 }
 
 .stock-text {
   font-size: 12px;
-  color: var(--danger-color);
-  margin-left: 8px;
+  color: #425b67;
   white-space: nowrap;
 }
+
+.stock-text.is-sold-out { color: #8a371f; font-weight: 600; }
+.detail-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 8px; color: #153d4b; background: #e8f2f2; font-weight: 600; }
+.detail-link::after { content: ''; position: absolute; inset: 0; }
+.detail-link:hover { color: #153d4b; background: #cce4e5; }
+.detail-link:focus-visible { outline: 2px solid #206681; outline-offset: 2px; }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
   margin-top: 40px;
 }
+
+.pagination-wrapper :deep(.el-pagination) { flex-wrap: wrap; justify-content: center; row-gap: 8px; max-width: 100%; }
 
 .img-placeholder {
   height: 100%;
