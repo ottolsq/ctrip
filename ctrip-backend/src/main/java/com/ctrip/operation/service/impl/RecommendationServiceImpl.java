@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 推荐位服务实现。
@@ -82,14 +85,27 @@ public class RecommendationServiceImpl implements RecommendationService {
         wrapper.eq(Recommendation::getSlot, slot)
                 .eq(Recommendation::getStatus, DisplayStatus.ENABLED);
 
-        return recommendationMapper.selectList(wrapper).stream()
+        List<Recommendation> active = recommendationMapper.selectList(wrapper).stream()
                 .filter(item -> item.getStatus() == DisplayStatus.ENABLED)
                 .filter(item -> item.getStartAt() == null || !now.isBefore(item.getStartAt()))
                 .filter(item -> item.getEndAt() == null || !now.isAfter(item.getEndAt()))
                 .sorted(Comparator.comparing(
                                 (Recommendation item) -> item.getSortOrder() == null ? 0 : item.getSortOrder())
                         .thenComparing(item -> item.getId() == null ? 0L : item.getId()))
-                .map(this::assemblePublic)
+                .toList();
+
+        Map<Long, Guide> guides = guideIds(active).isEmpty() ? Map.of()
+                : guideMapper.selectBatchIds(guideIds(active)).stream()
+                        .collect(Collectors.toMap(Guide::getId, Function.identity(), (a, b) -> a));
+        Map<Long, Destination> destinations = destinationIds(active).isEmpty() ? Map.of()
+                : destinationMapper.selectBatchIds(destinationIds(active)).stream()
+                        .collect(Collectors.toMap(Destination::getId, Function.identity(), (a, b) -> a));
+        Map<Long, BlindBoxTemplate> templates = templateIds(active).isEmpty() ? Map.of()
+                : templateMapper.selectBatchIds(templateIds(active)).stream()
+                        .collect(Collectors.toMap(BlindBoxTemplate::getId, Function.identity(), (a, b) -> a));
+
+        return active.stream()
+                .map(item -> assemblePublic(item, guides, destinations, templates))
                 .filter(java.util.Objects::nonNull)
                 .toList();
     }
@@ -129,7 +145,9 @@ public class RecommendationServiceImpl implements RecommendationService {
         existing.setStatus(request.status() == null ? existing.getStatus() : request.status());
         existing.setStartAt(request.startAt());
         existing.setEndAt(request.endAt());
-        recommendationMapper.updateById(existing);
+        if (recommendationMapper.updateById(existing) == 0) {
+            throw new BusinessException("推荐位已被他人修改，请刷新后重试");
+        }
         return toResponse(existing);
     }
 
@@ -157,10 +175,13 @@ public class RecommendationServiceImpl implements RecommendationService {
         }
     }
 
-    private PublicRecommendationResponse assemblePublic(Recommendation item) {
+    private PublicRecommendationResponse assemblePublic(
+            Recommendation item, Map<Long, Guide> guides,
+            Map<Long, Destination> destinations,
+            Map<Long, BlindBoxTemplate> templates) {
         return switch (item.getTargetType()) {
             case GUIDE -> {
-                Guide guide = guideMapper.selectById(item.getTargetId());
+                Guide guide = guides.get(item.getTargetId());
                 if (guide == null || guide.getStatus() != GuideStatus.PUBLISHED) {
                     yield null;
                 }
@@ -169,7 +190,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                         guide.getTitle(), guide.getCoverUrl(), "/guides/" + guide.getId());
             }
             case DESTINATION -> {
-                Destination destination = destinationMapper.selectById(item.getTargetId());
+                Destination destination = destinations.get(item.getTargetId());
                 if (destination == null) {
                     yield null;
                 }
@@ -179,7 +200,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                         "/destinations/" + destination.getId());
             }
             case BLIND_BOX_TEMPLATE -> {
-                BlindBoxTemplate template = templateMapper.selectById(item.getTargetId());
+                BlindBoxTemplate template = templates.get(item.getTargetId());
                 if (template == null || template.getStatus() != TemplateStatus.ACTIVE) {
                     yield null;
                 }
@@ -189,6 +210,27 @@ public class RecommendationServiceImpl implements RecommendationService {
                         "/blind-box/" + template.getId());
             }
         };
+    }
+
+    private java.util.Set<Long> guideIds(List<Recommendation> items) {
+        return targetIds(items, RecommendationTargetType.GUIDE);
+    }
+
+    private java.util.Set<Long> destinationIds(List<Recommendation> items) {
+        return targetIds(items, RecommendationTargetType.DESTINATION);
+    }
+
+    private java.util.Set<Long> templateIds(List<Recommendation> items) {
+        return targetIds(items, RecommendationTargetType.BLIND_BOX_TEMPLATE);
+    }
+
+    private java.util.Set<Long> targetIds(List<Recommendation> items,
+                                          RecommendationTargetType type) {
+        return items.stream()
+                .filter(item -> item.getTargetType() == type)
+                .map(Recommendation::getTargetId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private Recommendation requireRecommendation(Long id) {

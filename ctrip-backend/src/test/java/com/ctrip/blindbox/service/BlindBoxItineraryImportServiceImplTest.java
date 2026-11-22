@@ -241,6 +241,36 @@ class BlindBoxItineraryImportServiceImplTest {
     }
 
     @Test
+    @DisplayName("days 小于日程键：按日程键推导，避免丢天")
+    void import_daysLowerThanDayKeys_shouldUseDayKeys() throws Exception {
+        String text = """
+                {"destination":"杭州","destinationId":3,"theme":"文化","days":1,
+                 "itinerary":{"day1":{"items":["游览西湖"]},"day2":{"items":["游览灵隐寺"]}}}
+                """;
+        when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
+        when(resultMapper.selectOne(any())).thenReturn(result(text, null));
+        mockLock();
+        when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
+                .thenReturn(itineraryResponse(99L));
+        when(itineraryService.getDetail(99L, 1L)).thenReturn(itineraryResponse(99L));
+        when(itineraryService.addItem(anyLong(), anyLong(), eq(1L), any()))
+                .thenReturn(new ItineraryItemResponse(
+                        1L, 11L, "ATTRACTION", "西湖", "", "上午", "", 1));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        importService.importItinerary(1L, "BB202611220001");
+
+        ArgumentCaptor<CreateItineraryRequest> captor =
+                ArgumentCaptor.forClass(CreateItineraryRequest.class);
+        verify(itineraryService).createItinerary(eq(1L), captor.capture());
+        assertThat(java.time.temporal.ChronoUnit.DAYS.between(
+                captor.getValue().startDate(), captor.getValue().endDate()))
+                .isEqualTo(1);
+        verify(itineraryService, org.mockito.Mockito.times(2))
+                .addItem(anyLong(), anyLong(), eq(1L), any());
+    }
+
+    @Test
     @DisplayName("条件更新 0 行：视为并发冲突并抛业务异常")
     void import_conditionalUpdateZeroRows_shouldThrow() throws Exception {
         when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));

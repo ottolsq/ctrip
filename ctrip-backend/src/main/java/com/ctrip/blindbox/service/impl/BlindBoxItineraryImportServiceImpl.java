@@ -147,8 +147,7 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
             throw new BusinessException("盲盒结果不存在，无法导入");
         }
 
-        int days = scheme.days() != null && scheme.days() > 0
-                ? Math.min(scheme.days(), 30) : 3;
+        int days = resolveDays(scheme);
         LocalDate startDate = LocalDate.now();
         LocalDate endDate = startDate.plusDays(days - 1L);
         String title = buildTitle(scheme, days);
@@ -276,6 +275,27 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
         } catch (IllegalArgumentException e) {
             return ItemType.ATTRACTION;
         }
+    }
+
+    /**
+     * 天数取 days 字段与 itinerary dayN 键数量的较大值，避免静默丢天。
+     */
+    private int resolveDays(SchemeResponse scheme) {
+        int declared = scheme.days() != null && scheme.days() > 0 ? scheme.days() : 0;
+        int keys = 0;
+        if (scheme.itinerary() != null) {
+            for (String key : scheme.itinerary().keySet()) {
+                if (key != null && key.startsWith("day")) {
+                    try {
+                        keys = Math.max(keys, Integer.parseInt(key.substring(3)));
+                    } catch (NumberFormatException ignored) {
+                        // 非 dayN 键忽略
+                    }
+                }
+            }
+        }
+        int days = Math.max(declared, keys);
+        return days > 0 ? Math.min(days, 30) : 3;
     }
 
     private String buildTitle(SchemeResponse scheme, int days) {

@@ -602,8 +602,7 @@ public class BlindBoxOrderServiceImpl implements BlindBoxOrderService {
                 log.warn("库存不一致: templateId={}, redis={}, mysql={}",
                         template.getId(), redisStock, mysqlStock);
                 // 以 MySQL 为准——数据库是最终真相源
-                flashSaleService.prewarmStock(
-                        template.getId(), mysqlStock, Duration.ofHours(48));
+                flashSaleService.resetStock(template.getId(), mysqlStock);
                 reconciled++;
             }
         }

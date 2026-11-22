@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.ctrip.blindbox.entity.enums.BlindBoxType;
 import com.ctrip.blindbox.entity.enums.TemplateStatus;
 import lombok.AllArgsConstructor;
@@ -48,6 +49,9 @@ public class BlindBoxTemplate {
 
     /** 模板状态：ACTIVE 上架 / INACTIVE 下架 */
     private TemplateStatus status;
+
+    @Version
+    private Integer version;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

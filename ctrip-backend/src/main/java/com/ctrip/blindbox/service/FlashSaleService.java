@@ -59,6 +59,9 @@ public class FlashSaleService {
     /** 秒杀用户集合 Key 前缀：seckill:users:{templateId} */
     private static final String USERS_KEY_PREFIX = "seckill:users:";
 
+    /** 在途预扣计数 Key 前缀：seckill:pending:{templateId} */
+    private static final String PENDING_KEY_PREFIX = "seckill:pending:";
+
     /** 订单号计数器 Key 前缀：bb_order_seq:yyyyMMdd */
     private static final String ORDER_NO_KEY_PREFIX = "bb_order_seq:";
 
@@ -180,6 +183,7 @@ public class FlashSaleService {
     private void rollbackReservation(Long userId, Long templateId) {
         stringRedisTemplate.opsForValue().increment(STOCK_KEY_PREFIX + templateId);
         stringRedisTemplate.opsForSet().remove(USERS_KEY_PREFIX + templateId, userId.toString());
+        stringRedisTemplate.opsForValue().decrement(PENDING_KEY_PREFIX + templateId);
     }
 
     private FlashSaleResult handleSuccess(Long userId, FlashSaleRequest request) {
@@ -218,6 +222,27 @@ public class FlashSaleService {
                     templateId, stock, activityDuration.toSeconds());
         }
         return Boolean.TRUE.equals(initialized);
+    }
+
+    /**
+     * 以 MySQL 库存与在途预扣为准重置 Redis 库存（对账/管理员改库存）。
+     */
+    public void resetStock(Long templateId, int dbStock) {
+        int pending = getPendingCount(templateId);
+        int target = Math.max(dbStock - pending, 0);
+        stringRedisTemplate.opsForValue().set(
+                STOCK_KEY_PREFIX + templateId, String.valueOf(target), Duration.ofHours(48));
+        log.info("秒杀库存重置: templateId={}, db={}, pending={}, redis={}",
+                templateId, dbStock, pending, target);
+    }
+
+    /**
+     * 管理员修改 MySQL 库存后，仅在活动已预热时同步 Redis。
+     */
+    public void onAdminStockChanged(Long templateId, int dbStock) {
+        if (getRemainingStock(templateId) != -1) {
+            resetStock(templateId, dbStock);
+        }
     }
 
     /**
@@ -265,6 +290,12 @@ public class FlashSaleService {
         String stockKey = STOCK_KEY_PREFIX + templateId;
         String stock = stringRedisTemplate.opsForValue().get(stockKey);
         return stock != null ? Integer.parseInt(stock) : -1;
+    }
+
+    public int getPendingCount(Long templateId) {
+        String pending = stringRedisTemplate.opsForValue()
+                .get(PENDING_KEY_PREFIX + templateId);
+        return pending != null ? Integer.parseInt(pending) : 0;
     }
 
     // ========================================================================

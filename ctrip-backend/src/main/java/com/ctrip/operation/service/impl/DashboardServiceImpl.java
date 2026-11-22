@@ -1,5 +1,6 @@
 package com.ctrip.operation.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
 import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
@@ -53,9 +54,14 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDate today = LocalDate.now();
         LocalDate start = today.minusDays(6);
 
-        List<User> users = userMapper.selectList(null);
-        List<Guide> guides = guideMapper.selectList(null);
-        List<BlindBoxOrder> orders = orderMapper.selectList(null);
+        // 只查询聚合所需列，避免把攻略正文等大字段加载进内存
+        List<User> users = userMapper.selectList(new LambdaQueryWrapper<User>()
+                .select(User::getId, User::getCreatedAt));
+        List<Guide> guides = guideMapper.selectList(new LambdaQueryWrapper<Guide>()
+                .select(Guide::getId, Guide::getStatus, Guide::getCreatedAt));
+        List<BlindBoxOrder> orders = orderMapper.selectList(new LambdaQueryWrapper<BlindBoxOrder>()
+                .select(BlindBoxOrder::getId, BlindBoxOrder::getStatus,
+                        BlindBoxOrder::getPayAmount, BlindBoxOrder::getCreatedAt));
 
         long todayNewUsers = users.stream()
                 .filter(user -> user.getCreatedAt() != null

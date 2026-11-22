@@ -61,6 +61,9 @@ public class FlashSaleOrderConsumer {
     /** 秒杀用户集合 Key 前缀：seckill:users:{templateId} */
     private static final String USERS_KEY_PREFIX = "seckill:users:";
 
+    /** 在途预扣计数 Key 前缀：seckill:pending:{templateId} */
+    private static final String PENDING_KEY_PREFIX = "seckill:pending:";
+
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
     private final BlindBoxPreferenceService preferenceService;
@@ -85,7 +88,7 @@ public class FlashSaleOrderConsumer {
      * <p>注意：队列名 {@code flash.sale.order.queue} 在
      * {@code RabbitMQConfig} 中声明并绑定到 {@code flash.sale.exchange}。
      */
-    @RabbitListener(queues = "flash.sale.order.queue")
+    @RabbitListener(queues = com.ctrip.config.RabbitMQConfig.FLASH_SALE_ORDER_QUEUE)
     @Transactional
     public void onCreateOrder(FlashSaleMessage message) {
         log.info("收到秒杀订单消息: orderNo={}, userId={}, templateId={}",
@@ -114,6 +117,7 @@ public class FlashSaleOrderConsumer {
             int rows = templateMapper.decrementStock(message.templateId());
             if (rows == 0) {
                 // Redis 已扣但 MySQL 不足：不恢复 Redis，释放用户以便重试，消息进死信
+                decrementPending(message.templateId());
                 removeUser(message.templateId(), message.userId());
                 throw new AmqpRejectAndDontRequeueException(
                         "秒杀库存异常(Redis已扣但MySQL不足): orderNo=" + message.orderNo());
@@ -147,6 +151,7 @@ public class FlashSaleOrderConsumer {
                     message.theme());
 
             AfterCommitExecutor.run(() -> {
+                decrementPending(message.templateId());
                 eventPublisher.publishOrderStatusEvent(
                         "ORDER_CREATED", order.getId(), order.getOrderNo(), order.getUserId(),
                         order.getTemplateId(), order.getPayAmount(), "FLASH_SALE", null);
@@ -169,6 +174,7 @@ public class FlashSaleOrderConsumer {
             if (stockDeducted) {
                 rollbackRedisStock(message.templateId());
             }
+            decrementPending(message.templateId());
             removeUser(message.templateId(), message.userId());
             log.error("秒杀订单创建失败，已补偿并转死信: orderNo={}, templateId={}, error={}",
                     message.orderNo(), message.templateId(), e.getMessage(), e);
@@ -188,5 +194,9 @@ public class FlashSaleOrderConsumer {
     private void removeUser(Long templateId, Long userId) {
         stringRedisTemplate.opsForSet().remove(
                 USERS_KEY_PREFIX + templateId, userId.toString());
+    }
+
+    private void decrementPending(Long templateId) {
+        stringRedisTemplate.opsForValue().decrement(PENDING_KEY_PREFIX + templateId);
     }
 }

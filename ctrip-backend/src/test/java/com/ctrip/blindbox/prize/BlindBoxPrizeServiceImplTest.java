@@ -81,7 +81,7 @@ class BlindBoxPrizeServiceImplTest {
 
     private void mockLock() throws InterruptedException {
         when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
     }
 
@@ -164,6 +164,23 @@ class BlindBoxPrizeServiceImplTest {
         assertThat(prize.destinationName()).isEqualTo("京都");
         assertThat(prize.guaranteed()).isTrue();
         verify(redisTemplate).delete("blindbox:guarantee:9:1");
+    }
+
+    @Test
+    @DisplayName("保底边界：连续 9 次未中仍不强制")
+    void draw_nineMisses_shouldNotForceGuarantee() throws InterruptedException {
+        mockLock();
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("blindbox:draw:100")).thenReturn(null);
+        when(valueOperations.get("blindbox:guarantee:9:1")).thenReturn("9");
+        when(valueOperations.increment("blindbox:guarantee:9:1")).thenReturn(10L);
+        when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(
+                destination(1L, "杭州"), destination(2L, "北京")));
+
+        DrawnPrize prize = service(0.1).draw(order());
+
+        assertThat(prize.tier()).isEqualTo("COMMON");
+        assertThat(prize.guaranteed()).isFalse();
     }
 
     @Test

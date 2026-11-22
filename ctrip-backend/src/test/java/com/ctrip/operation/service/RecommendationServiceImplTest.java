@@ -124,12 +124,13 @@ class RecommendationServiceImplTest {
                         DisplayStatus.ENABLED, null, null),
                 recommendation(3L, RecommendationTargetType.BLIND_BOX_TEMPLATE, 20L, 2,
                         DisplayStatus.ENABLED, null, null)));
-        when(guideMapper.selectById(10L)).thenReturn(Guide.builder()
-                .id(10L).title("杭州三日游").coverUrl("https://img.example.com/guide.jpg")
-                .status(GuideStatus.PUBLISHED).build());
-        when(guideMapper.selectById(11L)).thenReturn(Guide.builder()
-                .id(11L).title("审核中的攻略").status(GuideStatus.PENDING).build());
-        when(templateMapper.selectById(20L)).thenReturn(null);
+        when(guideMapper.selectBatchIds(any())).thenReturn(List.of(
+                Guide.builder()
+                        .id(10L).title("杭州三日游").coverUrl("https://img.example.com/guide.jpg")
+                        .status(GuideStatus.PUBLISHED).build(),
+                Guide.builder()
+                        .id(11L).title("审核中的攻略").status(GuideStatus.PENDING).build()));
+        when(templateMapper.selectBatchIds(any())).thenReturn(List.of());
 
         List<PublicRecommendationResponse> result =
                 recommendationService.listActive("home_featured", now);
@@ -149,8 +150,8 @@ class RecommendationServiceImplTest {
         when(recommendationMapper.selectList(any())).thenReturn(List.of(
                 recommendation(4L, RecommendationTargetType.DESTINATION, 5L, 0,
                         DisplayStatus.ENABLED, null, null)));
-        when(destinationMapper.selectById(5L)).thenReturn(Destination.builder()
-                .id(5L).name("杭州").coverUrl("https://img.example.com/hangzhou.jpg").build());
+        when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(Destination.builder()
+                .id(5L).name("杭州").coverUrl("https://img.example.com/hangzhou.jpg").build()));
 
         List<PublicRecommendationResponse> result =
                 recommendationService.listActive("home_featured", now);
@@ -168,8 +169,8 @@ class RecommendationServiceImplTest {
         when(recommendationMapper.selectList(any())).thenReturn(List.of(
                 recommendation(9L, RecommendationTargetType.BLIND_BOX_TEMPLATE, 21L, 0,
                         DisplayStatus.ENABLED, null, null)));
-        when(templateMapper.selectById(21L)).thenReturn(BlindBoxTemplate.builder()
-                .id(21L).name("已下架盲盒").status(TemplateStatus.INACTIVE).build());
+        when(templateMapper.selectBatchIds(any())).thenReturn(List.of(BlindBoxTemplate.builder()
+                .id(21L).name("已下架盲盒").status(TemplateStatus.INACTIVE).build()));
 
         assertThat(recommendationService.listActive("home_featured", now)).isEmpty();
     }
@@ -181,7 +182,7 @@ class RecommendationServiceImplTest {
         when(recommendationMapper.selectList(any())).thenReturn(List.of(
                 recommendation(12L, RecommendationTargetType.GUIDE, 12L, 0,
                         DisplayStatus.ENABLED, null, null)));
-        when(guideMapper.selectById(12L)).thenReturn(null);
+        when(guideMapper.selectBatchIds(any())).thenReturn(List.of());
 
         assertThat(recommendationService.listActive("home_featured", now)).isEmpty();
     }
@@ -197,8 +198,8 @@ class RecommendationServiceImplTest {
                         DisplayStatus.ENABLED, null, now.minusHours(1)),
                 recommendation(8L, RecommendationTargetType.DESTINATION, 5L, 2,
                         DisplayStatus.ENABLED, now.minusHours(1), now.plusHours(1))));
-        when(destinationMapper.selectById(5L)).thenReturn(Destination.builder()
-                .id(5L).name("杭州").coverUrl("https://img.example.com/hangzhou.jpg").build());
+        when(destinationMapper.selectBatchIds(any())).thenReturn(List.of(Destination.builder()
+                .id(5L).name("杭州").coverUrl("https://img.example.com/hangzhou.jpg").build()));
 
         List<PublicRecommendationResponse> result =
                 recommendationService.listActive("home_featured", now);

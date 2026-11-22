@@ -95,7 +95,9 @@ public class BannerServiceImpl implements BannerService {
         existing.setStatus(request.status() == null ? existing.getStatus() : request.status());
         existing.setStartAt(request.startAt());
         existing.setEndAt(request.endAt());
-        bannerMapper.updateById(existing);
+        if (bannerMapper.updateById(existing) == 0) {
+            throw new BusinessException("轮播图已被他人修改，请刷新后重试");
+        }
         return toResponse(existing);
     }
 

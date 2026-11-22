@@ -11,6 +11,7 @@ import com.ctrip.blindbox.entity.enums.TemplateStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.service.impl.BlindBoxTemplateServiceImpl;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.common.exception.BusinessException;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,6 +45,8 @@ class BlindBoxTemplateServiceImplTest {
     private BlindBoxTemplateMapper templateMapper;
     @Mock
     private BlindBoxOrderMapper orderMapper;
+    @Mock
+    private FlashSaleService flashSaleService;
 
     private BlindBoxTemplateServiceImpl templateService;
 
@@ -57,7 +60,8 @@ class BlindBoxTemplateServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        templateService = new BlindBoxTemplateServiceImpl(templateMapper, orderMapper);
+        templateService = new BlindBoxTemplateServiceImpl(
+                templateMapper, orderMapper, flashSaleService);
     }
 
     private String validRule() {
@@ -187,6 +191,21 @@ class BlindBoxTemplateServiceImplTest {
                 ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
         verify(templateMapper).update(isNull(), captor.capture());
         assertThat(captor.getValue().getSqlSet()).doesNotContain("stock");
+    }
+
+    @Test
+    @DisplayName("管理员改限定库存：同步秒杀 Redis")
+    void updateLimitedStock_shouldSyncFlashSaleStock() {
+        BlindBoxTemplate existing = template(BlindBoxType.LIMITED, 5, validRule());
+        existing.setId(4L);
+        BlindBoxTemplate refreshed = template(BlindBoxType.LIMITED, 8, validRule());
+        refreshed.setId(4L);
+        when(templateMapper.selectById(4L)).thenReturn(existing, refreshed);
+        when(templateMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        templateService.updateTemplate(4L, BlindBoxTemplate.builder().stock(8).build());
+
+        verify(flashSaleService).onAdminStockChanged(4L, 8);
     }
 
     @Test

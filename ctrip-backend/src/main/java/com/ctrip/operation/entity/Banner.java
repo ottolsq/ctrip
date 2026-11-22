@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.ctrip.operation.entity.enums.DisplayStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,6 +40,9 @@ public class Banner {
     private LocalDateTime startAt;
 
     private LocalDateTime endAt;
+
+    @Version
+    private Integer version;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

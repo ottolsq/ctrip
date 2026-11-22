@@ -13,6 +13,7 @@ import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
 import com.ctrip.blindbox.rule.BlindBoxRuleConfigParser;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.common.exception.BusinessException;
 import com.ctrip.common.exception.ResourceNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,11 +30,14 @@ public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
 
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
+    private final FlashSaleService flashSaleService;
 
     public BlindBoxTemplateServiceImpl(BlindBoxTemplateMapper templateMapper,
-                                       BlindBoxOrderMapper orderMapper) {
+                                       BlindBoxOrderMapper orderMapper,
+                                       FlashSaleService flashSaleService) {
         this.templateMapper = templateMapper;
         this.orderMapper = orderMapper;
+        this.flashSaleService = flashSaleService;
     }
 
     @Override
@@ -189,8 +193,18 @@ public class BlindBoxTemplateServiceImpl implements BlindBoxTemplateService {
         if (!hasUpdates) {
             return TemplateConverter.toResponse(existing);
         }
-        templateMapper.update(null, wrapper);
-        return TemplateConverter.toResponse(requireTemplate(id));
+        if (existing.getVersion() != null) {
+            wrapper.eq(BlindBoxTemplate::getVersion, existing.getVersion())
+                    .set(BlindBoxTemplate::getVersion, existing.getVersion() + 1);
+        }
+        if (templateMapper.update(null, wrapper) == 0) {
+            throw new BusinessException("盲盒模板已被他人修改，请刷新后重试");
+        }
+        BlindBoxTemplate refreshed = requireTemplate(id);
+        if (refreshed.getType() == BlindBoxType.LIMITED && updates.getStock() != null) {
+            flashSaleService.onAdminStockChanged(id, refreshed.getStock());
+        }
+        return TemplateConverter.toResponse(refreshed);
     }
 
     /**

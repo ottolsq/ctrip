@@ -236,8 +236,12 @@ public class RabbitMQConfig {
     /** 秒杀订单 Exchange */
     public static final String FLASH_SALE_EXCHANGE = "flash.sale.exchange";
 
-    /** 秒杀订单队列 */
-    public static final String FLASH_SALE_ORDER_QUEUE = "flash.sale.order.queue";
+    /** 秒杀订单队列（v2：独立死信交换） */
+    public static final String FLASH_SALE_ORDER_QUEUE = "flash.sale.order.v2.queue";
+
+    /** 秒杀独立死信交换与队列 */
+    public static final String FLASH_DLX_EXCHANGE = "flash.dlx.exchange";
+    public static final String FLASH_SALE_DLQ = "flash.sale.order.dlq";
 
     @Bean
     public TopicExchange flashSaleExchange() {
@@ -245,10 +249,24 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public FanoutExchange flashDlxExchange() {
+        return new FanoutExchange(FLASH_DLX_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue flashSaleDlq() {
+        return QueueBuilder.durable(FLASH_SALE_DLQ).build();
+    }
+
+    @Bean
+    public Binding flashSaleDlqBinding(Queue flashSaleDlq, FanoutExchange flashDlxExchange) {
+        return BindingBuilder.bind(flashSaleDlq).to(flashDlxExchange);
+    }
+
+    @Bean
     public Queue flashSaleOrderQueue() {
         return QueueBuilder.durable(FLASH_SALE_ORDER_QUEUE)
-                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE)
-                .withArgument("x-dead-letter-routing-key", FLASH_SALE_ORDER_QUEUE + ".dlq")
+                .withArgument("x-dead-letter-exchange", FLASH_DLX_EXCHANGE)
                 .build();
     }
 

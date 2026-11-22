@@ -98,7 +98,8 @@ public class BlindBoxPrizeServiceImpl implements BlindBoxPrizeService {
         RLock lock = redissonClient.getLock(
                 LOCK_KEY_PREFIX + order.getTemplateId() + ":" + order.getUserId());
         try {
-            if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+            // 不指定 lease，交给 Redisson watchdog 续期，避免导入/查询超时导致锁提前释放
+            if (!lock.tryLock(3, TimeUnit.SECONDS)) {
                 throw new BusinessException("系统繁忙，请稍后重试");
             }
             try {
