@@ -19,17 +19,22 @@ public record FlashSaleMessage(
         Long userId,
         Long templateId,
         String orderNo,
-        LocalDateTime timestamp
+        LocalDateTime timestamp,
+        String departureCity,
+        String budgetLevel,
+        String theme
 ) {
     /**
-     * 工厂方法：创建秒杀消息，时间戳自动设为当前时间。
-     *
-     * @param userId     用户 ID
-     * @param templateId 盲盒模板 ID
-     * @param orderNo    预生成的订单号
-     * @return 秒杀消息实例
+     * 工厂方法：创建带旅行偏好的秒杀消息。
      */
+    public static FlashSaleMessage of(Long userId, Long templateId, String orderNo,
+                                      String departureCity, String budgetLevel, String theme) {
+        return new FlashSaleMessage(userId, templateId, orderNo, LocalDateTime.now(),
+                departureCity, budgetLevel, theme);
+    }
+
+    /** 兼容旧调用（无偏好）。 */
     public static FlashSaleMessage of(Long userId, Long templateId, String orderNo) {
-        return new FlashSaleMessage(userId, templateId, orderNo, LocalDateTime.now());
+        return of(userId, templateId, orderNo, null, null, null);
     }
 }

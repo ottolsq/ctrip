@@ -21,6 +21,7 @@ SCRIPTS = [
     "e2e_admin_p13.py",
     "e2e_admin_p14.py",
     "e2e_admin_p3.py",
+    "e2e_flash_sale.py",
 ]
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8080/api/v1")
 MAX_RETRIES = 2

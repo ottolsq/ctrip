@@ -2,8 +2,17 @@ package com.ctrip.blindbox.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ctrip.blindbox.dto.FlashSaleMessage;
+import com.ctrip.blindbox.dto.FlashSaleRequest;
 import com.ctrip.blindbox.entity.BlindBoxOrder;
+import com.ctrip.blindbox.entity.BlindBoxTemplate;
+import com.ctrip.blindbox.entity.enums.BlindBoxType;
+import com.ctrip.blindbox.entity.enums.BudgetLevel;
+import com.ctrip.blindbox.entity.enums.TemplateStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
+import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
+import com.ctrip.blindbox.rule.ActivityWindow;
+import com.ctrip.blindbox.rule.BlindBoxRuleConfigParser;
+import com.ctrip.common.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -65,14 +74,17 @@ public class FlashSaleService {
     private final StringRedisTemplate stringRedisTemplate;
     private final RabbitTemplate rabbitTemplate;
     private final BlindBoxOrderMapper orderMapper;
+    private final BlindBoxTemplateMapper templateMapper;
     private final DefaultRedisScript<Long> seckillScript;
 
     public FlashSaleService(StringRedisTemplate stringRedisTemplate,
                             RabbitTemplate rabbitTemplate,
-                            BlindBoxOrderMapper orderMapper) {
+                            BlindBoxOrderMapper orderMapper,
+                            BlindBoxTemplateMapper templateMapper) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.rabbitTemplate = rabbitTemplate;
         this.orderMapper = orderMapper;
+        this.templateMapper = templateMapper;
 
         // 从 classpath 加载 Lua 脚本，编译为 DefaultRedisScript<Long>
         this.seckillScript = new DefaultRedisScript<>();
@@ -94,7 +106,33 @@ public class FlashSaleService {
      * @param templateId 盲盒模板 ID
      * @return 秒杀结果（成功排队 / 库存不足 / 重复购买）
      */
-    public FlashSaleResult execute(Long userId, Long templateId) {
+    public FlashSaleResult execute(Long userId, FlashSaleRequest request) {
+        Long templateId = request.templateId();
+        BlindBoxTemplate template = templateMapper.selectById(templateId);
+        if (template == null) {
+            throw new BusinessException("盲盒模板不存在");
+        }
+        if (template.getType() != BlindBoxType.LIMITED) {
+            throw new BusinessException("仅限定盲盒支持秒杀");
+        }
+        if (template.getStatus() != TemplateStatus.ACTIVE) {
+            throw new BusinessException("盲盒已下架，无法抢购");
+        }
+        try {
+            BudgetLevel.valueOf(request.budgetLevel());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("预算等级不合法");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        BlindBoxRuleConfigParser.ensureActive(template.getRuleConfig(), now);
+        ActivityWindow window = BlindBoxRuleConfigParser.parse(template.getRuleConfig());
+
+        // 未预热时从 MySQL 懒加载库存到 Redis，TTL 覆盖活动结束
+        if (getRemainingStock(templateId) == -1) {
+            Duration ttl = Duration.between(now, window.end()).plusHours(1);
+            prewarmStock(templateId, template.getStock(), ttl);
+        }
+
         // 1. Lua 脚本原子预扣库存
         Long result = stringRedisTemplate.execute(
                 seckillScript,
@@ -109,7 +147,7 @@ public class FlashSaleService {
 
         // 2. 根据返回值判断结果
         return switch (result.intValue()) {
-            case 1 -> handleSuccess(userId, templateId);
+            case 1 -> handleSuccess(userId, request);
             case 0 -> {
                 log.debug("秒杀库存不足: userId={}, templateId={}", userId, templateId);
                 yield FlashSaleResult.soldOut();
@@ -128,13 +166,16 @@ public class FlashSaleService {
     /**
      * 秒杀成功：生成订单号 → 发送 MQ 消息 → 返回排队结果。
      */
-    private FlashSaleResult handleSuccess(Long userId, Long templateId) {
+    private FlashSaleResult handleSuccess(Long userId, FlashSaleRequest request) {
         String orderNo = generateOrderNo();
 
-        FlashSaleMessage message = FlashSaleMessage.of(userId, templateId, orderNo);
+        FlashSaleMessage message = FlashSaleMessage.of(
+                userId, request.templateId(), orderNo,
+                request.departureCity(), request.budgetLevel(), request.theme());
         rabbitTemplate.convertAndSend(FLASH_SALE_EXCHANGE, FLASH_SALE_ORDER_RK, message);
 
-        log.info("秒杀成功: userId={}, templateId={}, orderNo={}", userId, templateId, orderNo);
+        log.info("秒杀成功: userId={}, templateId={}, orderNo={}",
+                userId, request.templateId(), orderNo);
         return FlashSaleResult.queued(orderNo);
     }
 

@@ -2,12 +2,14 @@ package com.ctrip.blindbox.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ctrip.blindbox.dto.DrawRecordResponse;
+import com.ctrip.blindbox.dto.FlashSaleRequest;
 import com.ctrip.blindbox.dto.OrderResponse;
 import com.ctrip.blindbox.dto.ProbabilityResponse;
 import com.ctrip.blindbox.dto.TemplateResponse;
 import com.ctrip.blindbox.dto.ResultResponse;
 import com.ctrip.blindbox.prize.BlindBoxPrizeService;
 import com.ctrip.blindbox.service.BlindBoxItineraryImportService;
+import com.ctrip.blindbox.service.FlashSaleService;
 import com.ctrip.blindbox.service.BlindBoxOrderService;
 import com.ctrip.blindbox.service.BlindBoxResultService;
 import com.ctrip.blindbox.service.BlindBoxTemplateService;
@@ -34,19 +36,22 @@ public class BlindBoxController {
     private final BlindBoxPrizeService prizeService;
     private final DrawRecordService drawRecordService;
     private final BlindBoxItineraryImportService itineraryImportService;
+    private final FlashSaleService flashSaleService;
 
     public BlindBoxController(BlindBoxTemplateService templateService,
                               BlindBoxResultService resultService,
                               BlindBoxOrderService orderService,
                               BlindBoxPrizeService prizeService,
                               DrawRecordService drawRecordService,
-                              BlindBoxItineraryImportService itineraryImportService) {
+                              BlindBoxItineraryImportService itineraryImportService,
+                              FlashSaleService flashSaleService) {
         this.templateService = templateService;
         this.resultService = resultService;
         this.orderService = orderService;
         this.prizeService = prizeService;
         this.drawRecordService = drawRecordService;
         this.itineraryImportService = itineraryImportService;
+        this.flashSaleService = flashSaleService;
     }
 
     /**
@@ -78,6 +83,16 @@ public class BlindBoxController {
         // 仅上架模板可查看概率
         templateService.getTemplateDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(prizeService.getProbabilities()));
+    }
+
+    /**
+     * 限定盲盒秒杀：Lua 预扣 + MQ 异步建单。
+     */
+    @PostMapping("/flash-sale")
+    public ResponseEntity<ApiResponse<FlashSaleService.FlashSaleResult>> flashSale(
+            @AuthenticationPrincipal Long userId,
+            @jakarta.validation.Valid @RequestBody FlashSaleRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(flashSaleService.execute(userId, request)));
     }
 
     /**

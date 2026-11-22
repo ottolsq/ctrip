@@ -6,6 +6,7 @@ import com.ctrip.blindbox.entity.BlindBoxTemplate;
 import com.ctrip.blindbox.entity.enums.OrderStatus;
 import com.ctrip.blindbox.mapper.BlindBoxOrderMapper;
 import com.ctrip.blindbox.mapper.BlindBoxTemplateMapper;
+import com.ctrip.blindbox.service.BlindBoxPreferenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -55,13 +56,16 @@ public class FlashSaleOrderConsumer {
 
     private final BlindBoxTemplateMapper templateMapper;
     private final BlindBoxOrderMapper orderMapper;
+    private final BlindBoxPreferenceService preferenceService;
     private final StringRedisTemplate stringRedisTemplate;
 
     public FlashSaleOrderConsumer(BlindBoxTemplateMapper templateMapper,
                                    BlindBoxOrderMapper orderMapper,
+                                   BlindBoxPreferenceService preferenceService,
                                    StringRedisTemplate stringRedisTemplate) {
         this.templateMapper = templateMapper;
         this.orderMapper = orderMapper;
+        this.preferenceService = preferenceService;
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
@@ -117,6 +121,12 @@ public class FlashSaleOrderConsumer {
                     .expireAt(LocalDateTime.now().plusMinutes(15))
                     .build();
             orderMapper.insert(order);
+
+            if (message.departureCity() != null && message.budgetLevel() != null) {
+                preferenceService.savePreference(
+                        order.getId(), message.departureCity(),
+                        message.budgetLevel(), message.theme());
+            }
 
             log.info("秒杀订单创建成功: orderNo={}, userId={}, templateId={}, amount={}",
                     message.orderNo(), message.userId(), message.templateId(), template.getPrice());
