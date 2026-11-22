@@ -405,6 +405,13 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders" \
   "data": null,
   "error": "活动未开始"
 }
+
+// 秒杀活动期间禁止普通下单 (400)
+{
+  "success": false,
+  "data": null,
+  "error": "限时抢购中，请使用秒杀入口"
+}
 {
   "success": false,
   "data": null,
@@ -1062,11 +1069,14 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 
 - 仅 `LIMITED` 且上架、活动窗口内的模板；
 - Redis Lua 原子预扣库存（未预热时自动从 MySQL 加载），成功后发送 MQ 异步创建 `PAID` 订单；
-- 返回 `{ success, status, orderNo, message }`：
+- HTTP 状态固定为 **200**，结果在内层 `data`：
+  `{"success":true,"data":{"success":true,"status":"QUEUED","orderNo":"...","message":"..."},"error":null}`
   - `QUEUED`：抢购成功，订单异步创建；
   - `SOLD_OUT`：已售罄；
   - `DUPLICATED`：同一用户同一模板已抢购；
-- 异步消费者会保存出发城市/预算/主题，开盒流程可直接使用。
+- 异步消费者会保存出发城市/预算/主题，开盒流程可直接使用；
+- 活动窗口外/模板下架/非限定盲盒 → **400**；
+- Redis 秒杀库存 key 存在期间，普通 `POST /blind-box/orders` 对同一 LIMITED 模板返回 **400**（`限时抢购中，请使用秒杀入口`）。
 
 ## 合规接口（P3）
 

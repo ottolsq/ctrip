@@ -141,7 +141,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**186/186 通过**（P3 + 导入 + 秒杀入口/消费者测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**192/192 通过**（P3 + 导入 + 秒杀入口/消费者测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
