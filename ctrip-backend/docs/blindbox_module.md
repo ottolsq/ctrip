@@ -148,6 +148,7 @@
 | shareCode | String(6) | 分享链接短码（6位 Base62） |
 | shareExpiresAt | LocalDateTime | 分享链接过期时间 |
 | openedAt | LocalDateTime | 开盒时间 |
+| importedItineraryId | Long | 已导入的个人行程 ID（为空表示未导入） |
 | createdAt | LocalDateTime | 创建时间（自动填充） |
 
 **resultText JSON 结构：**
@@ -684,6 +685,7 @@ WHERE id = ? AND stock >= 1;
 | POST | `/api/v1/blind-box/orders/{orderNo}/open` | ✅ | 开盒 |
 | GET | `/api/v1/blind-box/my` | ✅ | 我的盲盒列表（分页） |
 | GET | `/api/v1/blind-box/orders/{orderNo}/result` | ✅ | 结果详情 |
+| POST | `/api/v1/blind-box/orders/{orderNo}/import-itinerary` | ✅ | 结果导入个人行程（幂等） |
 | POST | `/api/v1/blind-box/orders/{orderNo}/share-result` | ✅ | 生成分享链接 |
 | GET | `/api/v1/blind-box/share/{shareCode}` | 否 | 查看分享结果 |
 

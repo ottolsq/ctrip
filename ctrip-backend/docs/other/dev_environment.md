@@ -61,7 +61,7 @@ useSSL=false&allowPublicKeyRetrieval=true
 ```bash
 cd /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL
 for f in ctrip_user.sql ctrip_content.sql ctrip_itinerary.sql ctrip_blindbox.sql \
-         ctrip_admin.sql ctrip_p3_compliance.sql \
+         ctrip_admin.sql ctrip_p3_compliance.sql ctrip_blindbox_import.sql \
          ctrip_user_demo_data.sql ctrip_content_demo_data.sql \
          ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql \
          ctrip_admin_seed.sql; do
@@ -71,6 +71,7 @@ done
 
 - `ctrip_admin.sql` 是 P1 迁移脚本，**仅执行一次**；重复执行会因列已存在而失败。
 - `ctrip_p3_compliance.sql` 使用 `CREATE TABLE IF NOT EXISTS`，可重复执行。
+- `ctrip_blindbox_import.sql` 为一次性 ALTER，重复执行会因列已存在而失败。
 - 导入后共 18 张表；示例数据包含 5 个用户、5 个目的地、6 篇攻略、8 条行程、5 个盲盒模板。
 
 ### 3.3 后台种子账号（仅开发）
@@ -140,7 +141,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**174/174 通过**（P3 + 一键导入行程测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**177/177 通过**（P3 + 一键导入行程测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 

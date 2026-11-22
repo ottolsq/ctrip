@@ -791,6 +791,7 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open"
 | resultText | object | 完整旅行方案 JSON（仅 OPENED 状态返回，见 [resultText 结构说明](#resulttext-结构说明)） |
 | shareCode | string | 分享链接短码（仅 OPENED 状态返回，6 位 Base62） |
 | openedAt | string | 开盒时间（仅 OPENED 状态返回），ISO 8601 格式 |
+| importedItineraryId | number | 已导入的个人行程 ID；为空表示尚未导入 |
 
 #### 失败响应
 
