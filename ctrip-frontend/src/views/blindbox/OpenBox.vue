@@ -63,19 +63,19 @@
               </span>
               <span class="value">{{ result.theme }}</span>
             </div>
-            <div class="result-item" v-if="result.days">
+            <div class="result-item" v-if="resultDays">
               <span class="label">
                 <el-icon><Clock /></el-icon>
                 行程天数
               </span>
-              <span class="value">{{ result.days }} 天</span>
+              <span class="value">{{ resultDays }} 天</span>
             </div>
-            <div class="result-item" v-if="result.price">
+            <div class="result-item" v-if="orderInfo?.payAmount != null">
               <span class="label">
                 <el-icon><Wallet /></el-icon>
                 价值
               </span>
-              <span class="value price">¥{{ result.price }}</span>
+              <span class="value price">¥{{ orderInfo.payAmount }}</span>
             </div>
           </div>
           <div class="result-actions">
@@ -91,14 +91,15 @@
         <el-button
           type="primary"
           size="large"
-          :disabled="isShaking || isOpening"
+          :disabled="loading || isShaking || isOpening"
           :loading="isOpening"
-          @click="handleOpenBox"
+          @click="runOpenFlow(canOpen)"
           class="open-btn"
         >
           <el-icon class="el-icon--left"><Box /></el-icon>
-          {{ isShaking ? '摇晃中...' : isOpening ? '开启中...' : '开启盲盒' }}
+          {{ isShaking ? '摇晃中...' : isOpening ? '生成中...' : canOpen ? '开启盲盒' : '继续查询' }}
         </el-button>
+        <p v-if="notice" class="tip" role="status">{{ notice }}</p>
         <p class="tip" v-if="orderInfo">
           {{ orderInfo.templateName || '旅行盲盒' }} · 订单号: {{ orderNo }}
         </p>
@@ -111,22 +112,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getBlindBoxOrder, openBlindBox } from '@/api/blindbox'
+import { getBlindBoxOrder, getBlindBoxResult, openBlindBox } from '@/api/blindbox'
 import { Box, ArrowRight, Location, Clock, Wallet, CollectionTag } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const orderNo = route.params.orderNo
-const loading = ref(false)
+const POLL_INTERVAL_MS = 2000
+const POLL_TIMEOUT_MS = 60000
+const loading = ref(true)
 const isShaking = ref(false)
 const isOpening = ref(false)
-const isOpened = ref(false)
+const hasRequestedOpen = ref(false)
 const result = ref(null)
 const orderInfo = ref(null)
+const notice = ref('')
+const isOpened = computed(() => result.value !== null)
+const canOpen = computed(() => orderInfo.value?.status === 'PAID' && !hasRequestedOpen.value)
+const resultDays = computed(() => {
+  try {
+    return JSON.parse(result.value?.resultText || '{}')?.days
+  } catch {
+    return null
+  }
+})
+let active = true
+let cancelWait = null
 
 function getParticleStyle(i) {
   const angle = (i * 18) * Math.PI / 180
@@ -146,38 +161,65 @@ function getParticleStyle(i) {
   }
 }
 
-async function loadOrderInfo() {
-  loading.value = true
-  try {
-    const res = await getBlindBoxOrder(orderNo)
-    orderInfo.value = res.data
-  } catch (e) {
-    // 静默失败，不影响开盒
-  } finally {
-    loading.value = false
-  }
+function wait(delay) {
+  return new Promise(resolve => {
+    const finish = () => {
+      cancelWait = null
+      resolve()
+    }
+    const timer = setTimeout(finish, delay)
+    cancelWait = () => {
+      clearTimeout(timer)
+      finish()
+    }
+  })
 }
 
-async function handleOpenBox() {
+async function runOpenFlow(submit = false) {
   if (isShaking.value || isOpening.value) return
-
-  isShaking.value = true
-
-  await new Promise(resolve => setTimeout(resolve, 1500))
-
-  isShaking.value = false
-  isOpening.value = true
+  notice.value = ''
 
   try {
-    const res = await openBlindBox(orderNo)
-    result.value = res.data
+    if (submit) {
+      isShaking.value = true
+      await wait(1500)
+      if (!active) return
+      isShaking.value = false
+      hasRequestedOpen.value = true
+    }
+    isOpening.value = true
+    const response = await (submit ? openBlindBox(orderNo) : getBlindBoxOrder(orderNo))
+    if (!active) return
+    orderInfo.value = response.data
+    loading.value = false
 
-    await new Promise(resolve => setTimeout(resolve, 1800))
+    const deadline = Date.now() + POLL_TIMEOUT_MS
+    while (orderInfo.value.status === 'PROCESSING') {
+      await wait(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())))
+      if (!active) return
+      if (Date.now() >= deadline) {
+        notice.value = '行程仍在生成中，可继续查询。'
+        return
+      }
+      const latest = await getBlindBoxOrder(orderNo)
+      if (!active) return
+      orderInfo.value = latest.data
+    }
 
-    isOpened.value = true
-  } catch (e) {
+    if (orderInfo.value.status === 'OPENED') {
+      const opened = await getBlindBoxResult(orderNo)
+      if (active) result.value = opened.data
+    } else if (!canOpen.value) {
+      notice.value = orderInfo.value.status === 'PAID'
+        ? '尚未确认开盒请求，可继续查询订单状态。'
+        : '当前订单状态不可开盒。'
+    }
+  } catch (error) {
+    if (active) ElMessage.error(error.message || '查询开盒状态失败，请重试')
+  } finally {
+    loading.value = false
+    isShaking.value = false
     isOpening.value = false
-    ElMessage.error(e.message || '开盒失败，请重试')
   }
 }
 
@@ -185,8 +227,10 @@ function goToResult() {
   router.push(`/blind-box/orders/${orderNo}/result`)
 }
 
-onMounted(() => {
-  loadOrderInfo()
+onMounted(() => runOpenFlow())
+onBeforeUnmount(() => {
+  active = false
+  cancelWait?.()
 })
 </script>
 
