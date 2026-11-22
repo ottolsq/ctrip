@@ -140,7 +140,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**168/168 通过**（P3 新增概率/保底、AI 目的地、抽取记录测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**174/174 通过**（P3 + 一键导入行程测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -252,6 +252,14 @@ python -I ctrip-backend/scripts/e2e_admin_p3.py
 > 注意：同一 RabbitMQ 队列只能有一个后端实例消费。执行 E2E 时不要同时运行 8080 与 8081 两个实例，否则开盒事件可能被旧实例消费。
 
 P3 起结果生成队列升级为 `blindbox.result.gen.v2.queue`（带死信参数、消费失败重试 3 次后转 `dlx.exchange`）。旧队列 `blindbox.result.gen.queue` 不再被消费，确认无积压后可在 RabbitMQ 管理台删除。
+
+盲盒导入行程需执行一次迁移：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL/ctrip_blindbox_import.sql"
+```
+
+`e2e_p0.py` 已覆盖开盒 → 导入行程 → 重复导入幂等 → 行程天/明细校验。
 
 ## 8. 安全说明
 

@@ -1073,6 +1073,15 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/share/aB3xYz"
 - 目的地池为空的档位不会出现在响应中，剩余档位按权重重新归一化（保证合计 100%）；
 - 同一订单重复开盒请求使用同一抽奖结果（Redis 幂等缓存），不会重复消耗保底计数。
 
+### 开盒结果导入行程
+
+`POST /api/v1/blind-box/orders/{orderNo}/import-itinerary`（需登录，仅订单所有者，订单须已开盒）
+
+- 解析结果 JSON，在同一事务内创建行程、按天日程、行程项，并把交通加入第 1 天、酒店加入最后一天；
+- 行程状态为 `DRAFT`，不自动发布；
+- 首次返回 `ItineraryResponse`；重复调用返回同一行程（`blind_box_result.imported_itinerary_id`），不会生成副本；
+- 未开盒/非本人 → **403**；结果不存在 → **404**；结果 JSON 非法 → **400**。
+
 ### 我的抽取记录
 
 `GET /api/v1/blind-box/draw-records?page&size`（需登录）

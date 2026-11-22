@@ -300,6 +300,7 @@ blind_box_order (1) ──< blind_box_preference (1)
 - 开盒消费者先抽奖，再固定目的地生成 AI 方案；mock 回退同样使用抽中目的地。
 - 保底：Redis 计数 `blindbox:guarantee:{templateId}:{userId}`，连续 10 次未中 RARE+ 后下一次强制从 RARE/LEGENDARY 按权重抽取；命中后清零。
 - 抽取记录表 `blind_box_draw_record`：`order_id` 唯一，快照档位、目的地、是否保底、概率版本；与结果同事务写入。
+- 开盒结果可通过 `POST /api/v1/blind-box/orders/{orderNo}/import-itinerary` 原子导入为个人行程；`blind_box_result.imported_itinerary_id` 记录已导入行程，重复调用返回同一份。
 - 公开 `GET /api/v1/blind-box/{id}/probabilities`；用户 `GET /api/v1/blind-box/draw-records`；管理员 `GET /api/v1/admin/blind-box/draw-records`。
 
 ---

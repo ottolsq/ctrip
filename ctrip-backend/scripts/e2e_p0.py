@@ -127,6 +127,19 @@ def main():
     assert result, result
     print("BLINDBOX OPEN OK, order=", order_no,
           "result_keys=", list(result.keys())[:8])
+
+    imported = call(
+        "POST", f"/blind-box/orders/{order_no}/import-itinerary", token=token)
+    assert imported and imported.get("days"), imported
+    itinerary_id = imported["id"]
+    again = call(
+        "POST", f"/blind-box/orders/{order_no}/import-itinerary", token=token)
+    assert again["id"] == itinerary_id, (again, imported)
+    itinerary = call("GET", f"/itineraries/{itinerary_id}", token=token)
+    assert itinerary.get("days"), itinerary
+    assert any(day.get("items") for day in itinerary["days"]), itinerary
+    print("BLINDBOX IMPORT OK, itinerary=", itinerary_id,
+          "days=", len(itinerary["days"]))
     print("E2E PASS")
 
 
