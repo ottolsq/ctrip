@@ -62,6 +62,7 @@ useSSL=false&allowPublicKeyRetrieval=true
 cd /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL
 for f in ctrip_user.sql ctrip_content.sql ctrip_itinerary.sql ctrip_blindbox.sql \
          ctrip_admin.sql ctrip_p3_compliance.sql ctrip_blindbox_import.sql \
+         ctrip_optimistic_lock.sql ctrip_flash_sale_unique.sql \
          ctrip_user_demo_data.sql ctrip_content_demo_data.sql \
          ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql \
          ctrip_admin_seed.sql; do
@@ -71,7 +72,7 @@ done
 
 - `ctrip_admin.sql` 是 P1 迁移脚本，**仅执行一次**；重复执行会因列已存在而失败。
 - `ctrip_p3_compliance.sql` 使用 `CREATE TABLE IF NOT EXISTS`，可重复执行。
-- `ctrip_blindbox_import.sql` 为一次性 ALTER，重复执行会因列已存在而失败。
+- `ctrip_blindbox_import.sql`、`ctrip_optimistic_lock.sql`、`ctrip_flash_sale_unique.sql` 为一次性 ALTER，重复执行会因列/索引已存在而失败。
 - 导入后共 18 张表；示例数据包含 5 个用户、5 个目的地、6 篇攻略、8 条行程、5 个盲盒模板。
 
 ### 3.3 后台种子账号（仅开发）
@@ -141,7 +142,7 @@ cd ctrip-backend
 ./mvnw test
 ```
 
-当前基线：**192/192 通过**（P3 + 导入 + 秒杀入口/消费者测试）。`CtripApplicationTests` 使用 H2，并通过
+当前基线：**195/195 通过**（P3 + 导入 + 秒杀入口/消费者测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
 延迟 1 分钟，避免测试上下文在空库上触发查询。
 
@@ -261,6 +262,12 @@ wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/otto
 ```
 
 `e2e_p0.py` 已覆盖开盒 → 导入行程 → 重复导入幂等 → 行程天/明细校验。
+
+E2E 数据可用非破坏性脚本清理（删除/下架测试运营内容，保留用户与订单审计）：
+
+```bash
+python -I ctrip-backend/scripts/cleanup_e2e.py
+```
 
 ### 7.9 限时抢购 E2E
 

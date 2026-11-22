@@ -571,7 +571,8 @@ WHERE id = ? AND stock >= 1;
 - Redis 未预热时按活动结束时间自动预热；
 - Lua 原子扣减 Redis 库存并防重复购买；成功后发送 `flash.sale.order` 消息；
 - `FlashSaleOrderConsumer` 扣减 MySQL 库存、创建 `PAID` 订单并保存偏好；
-- 失败时补偿一次 Redis 库存、释放用户并转死信队列（不自动重试，避免重复加库存）。
+- 失败时补偿一次 Redis 库存、释放用户并转独立死信队列 `flash.sale.order.dlq`（不自动重试，避免重复加库存）。
+- `blind_box_order.flash_unique_key` 生成列 + 唯一索引，数据库层兜底“同一用户同一模板只能有一条秒杀订单”。
 
 详见 `docs/other/redis_rabbitmq_design.md` 9.4 节。
 
