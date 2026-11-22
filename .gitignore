@@ -1,3 +1,5 @@
-/docs/
+# 仅保留本地、不外传的文档与运行产物；docs/goal.md、docs/architecture.md 需要入库
+/docs/superpowers/
+/docs/*.doc
 .superpowers/
 /deploy/run/
