@@ -13,7 +13,7 @@
 | RabbitMQ | 4.4.1 | GitHub 通用二进制包 |
 | Erlang/OTP | 27.3.4.18 | Launchpad `ppa:rabbitmq/rabbitmq-erlang` |
 | Node.js | 26.x | 用户环境已安装 |
-| Maven | Maven Wrapper（`./mvnw`） | 项目自带 |
+| Maven | Maven Wrapper（PowerShell：`.\mvnw.cmd`；WSL：`bash ./mvnw`） | 项目自带 |
 
 选择 WSL2 原生服务而不是 Docker：当前网络无法访问 Docker Hub；WSL2 + systemd 已可用，安装与排障更直接。
 
@@ -43,7 +43,7 @@ Windows 侧通过 WSL localhost forwarding 访问 `127.0.0.1` 的 3306 / 6379 / 
 ### 3.1 账号与数据库
 
 - 地址：`localhost:3306`
-- 账号：`root / 123456`
+- 使用本地 MySQL 账号；命令示例通过 `MYSQL_USER` 传入用户名，由 `-p` 交互读取口令。
 - 数据库：`ctrip`，字符集 `utf8mb4`
 
 `application.properties` 的连接串已包含：
@@ -56,17 +56,17 @@ useSSL=false&allowPublicKeyRetrieval=true
 
 ### 3.2 初始化数据
 
-按依赖顺序导入 DDL，再导入示例数据：
+在 WSL 中从仓库根目录执行；先在当前终端设置 `MYSQL_USER` 为本地 MySQL 账号。按依赖顺序导入 DDL，再导入示例数据：
 
 ```bash
-cd /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL
+cd ctrip-backend/docs/SQL || exit 1
 for f in ctrip_user.sql ctrip_content.sql ctrip_itinerary.sql ctrip_blindbox.sql \
          ctrip_admin.sql ctrip_p3_compliance.sql ctrip_blindbox_import.sql \
          ctrip_optimistic_lock.sql ctrip_flash_sale_unique.sql \
          ctrip_user_demo_data.sql ctrip_content_demo_data.sql \
          ctrip_itinerary_demo_data.sql ctrip_blindbox_demo_data.sql \
          ctrip_admin_seed.sql; do
-  mysql -uroot -p123456 ctrip < "$f"
+  mysql -u "${MYSQL_USER:?Set MYSQL_USER first}" -p ctrip < "$f" || exit 1
 done
 ```
 
@@ -77,12 +77,7 @@ done
 
 ### 3.3 后台种子账号（仅开发）
 
-| 账号 | 密码 | 角色 |
-|------|------|------|
-| admin@example.com | Admin12345 | ADMIN |
-| operator@example.com | Operator12345 | CONTENT_OPERATOR |
-
-由 `ctrip_admin_seed.sql` 写入，仅用于本地开发与答辩演示。
+`ctrip_admin_seed.sql` 仅用于本地开发与答辩演示，提供 `ADMIN` 和 `CONTENT_OPERATOR` 两种角色。使用在本地设置的测试账号登录，不要在文档或命令中填写登录凭据。
 
 ## 4. Redis 8.10
 
@@ -92,8 +87,8 @@ done
 
 ## 5. RabbitMQ 4.4.1
 
-- AMQP：`localhost:5672`，账号 `guest / guest`
-- 管理台：http://localhost:15672（`guest / guest`）
+- AMQP：`localhost:5672`；应用使用本机配置的连接账号。
+- 管理控制台：`http://localhost:15672`；登录凭据在本机配置。
 - 安装目录：`/opt/rabbitmq_server-4.4.1`（软链 `/opt/rabbitmq`）
 - 配置：`/etc/rabbitmq/rabbitmq.conf`
 - 数据：`/var/lib/rabbitmq`
@@ -118,29 +113,63 @@ management.tcp.port = 15672
 
 ## 6. 启动应用
 
-```bash
-# 后端（8080）
-cd ctrip-backend
-export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-25.0.5.8-hotspot"
-export PATH="$JAVA_HOME/bin:$PATH"
-./mvnw spring-boot:run
+先确认 WSL 中间件已运行，再分别启动开发后端和前端。
 
-# 前端（3000，代理到 8080）
+### Windows PowerShell
+
+```powershell
+# 后端（从仓库根目录执行，默认 8080）
+Set-Location .\ctrip-backend
+.\mvnw.cmd -v
+.\mvnw.cmd spring-boot:run
+```
+
+```powershell
+# 前端（另开终端，从仓库根目录执行）
+Set-Location .\ctrip-frontend
+npm install
+npm run dev
+```
+
+### WSL
+
+在 WSL 内使用可用的 JDK 25 和 Node.js。后端和前端分别从仓库根目录启动：
+
+```bash
+# 后端终端
+cd ctrip-backend
+bash ./mvnw -v
+bash ./mvnw spring-boot:run
+```
+
+```bash
+# 前端终端
 cd ctrip-frontend
 npm install
 npm run dev
 ```
 
-Vite 监听 `0.0.0.0:3000`，因此 `http://localhost:3000` 与 `http://127.0.0.1:3000` 均可访问。该配置仅用于开发，不要在生产环境暴露开发服务器。
+开发入口是 `http://localhost:3000`（实际监听端口以 Vite 输出为准）。Vite 将 `/api` 和 `/uploads` 转发到 `http://localhost:8080`。如果页面能开但列表加载失败，先确认开发后端在 `8080`，仅有部署演练后端 `8081` 不够。部署演练使用 nginx `8088` 和 Windows jar `8081`，见[部署指南](../../../deploy/DEPLOYMENT.md)。不要同时运行共用同一 RabbitMQ 队列的两个后端实例，也不要把 Vite 开发服务器暴露到公网。
+
+### Maven Wrapper 下载报 403
+
+如果 `.\mvnw.cmd -v` 在 `DownloadFile` 报 `403`，失败的是 Maven 发行包下载，Spring Boot 尚未启动。项目指定的版本和下载地址见 [Wrapper 配置](../../.mvn/wrapper/maven-wrapper.properties)。
+
+- 下载地址恢复可访问后，重跑 `.\mvnw.cmd -v`；输出 Maven 和 Java 版本后，再运行 `.\mvnw.cmd spring-boot:run`。
+- 如果已有同版本 Maven，可先用 `mvn -v`（已加入 `PATH`）或 `& '实际的 Maven 路径\bin\mvn.cmd' -v` 确认，再在后端目录用同一个可执行文件运行 `spring-boot:run`。这是临时替代，不代表 Wrapper 已恢复。
+- 如果同版本 Maven 已在本机缓存，Windows Wrapper 仍可能因查找目录不同而尝试下载。它按下载 URL 的 SHA-256 查找发行包目录；可让维护者核对本机缓存是否匹配。不要把某台电脑的缓存路径写进仓库配置。
 
 ## 7. 验证
 
 ### 7.1 后端测试
 
-```bash
-cd ctrip-backend
-./mvnw test
+从后端目录执行：
+
+```powershell
+.\mvnw.cmd test
 ```
+
+在 WSL 中，对应命令为 `bash ./mvnw test`。
 
 当前基线：**195/195 通过**（P3 + 导入 + 秒杀入口/消费者测试）。`CtripApplicationTests` 使用 H2，并通过
 `app.cache.bloom.enabled=false` 关闭启动时的布隆过滤器预加载；定时任务的首次执行
@@ -237,10 +266,10 @@ bash deploy/stop.sh
 
 ### 7.8 合规能力 P3 E2E
 
-先执行迁移（可重复执行）：
+从仓库根目录在 WSL 执行迁移（可重复执行；`MYSQL_USER` 的设置同初始化数据）：
 
 ```bash
-wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL/ctrip_p3_compliance.sql"
+mysql -u "${MYSQL_USER:?Set MYSQL_USER first}" -p ctrip < ctrip-backend/docs/SQL/ctrip_p3_compliance.sql
 ```
 
 重启后端加载 P3 代码后执行：
@@ -258,7 +287,7 @@ P3 起结果生成队列升级为 `blindbox.result.gen.v2.queue`（带死信参�
 盲盒导入行程需执行一次迁移：
 
 ```bash
-wsl -d Ubuntu-24.04 -- bash -lc "mysql -uroot -p123456 ctrip < /mnt/c/Users/ottol/myproject/ctrip/ctrip-backend/docs/SQL/ctrip_blindbox_import.sql"
+mysql -u "${MYSQL_USER:?Set MYSQL_USER first}" -p ctrip < ctrip-backend/docs/SQL/ctrip_blindbox_import.sql
 ```
 
 `e2e_p0.py` 已覆盖开盒 → 导入行程 → 重复导入幂等 → 行程天/明细校验。

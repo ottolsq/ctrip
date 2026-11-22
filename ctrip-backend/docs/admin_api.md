@@ -6,12 +6,12 @@
 
 ## 1. 权限与种子账号
 
-| 账号 | 密码 | 角色 | 说明 |
-|------|------|------|------|
-| admin@example.com | Admin12345 | ADMIN | 全部管理功能 |
-| operator@example.com | Operator12345 | CONTENT_OPERATOR | 内容运营（P1.2 起开放） |
+| 角色 | 本地测试用途 |
+|---|---|
+| `ADMIN` | 用户、盲盒、订单和平台运营 |
+| `CONTENT_OPERATOR` | 内容运营 |
 
-种子账号由 `docs/SQL/ctrip_admin_seed.sql` 写入，仅限本地开发/答辩演示。
+`docs/SQL/ctrip_admin_seed.sql` 仅用于本地开发和答辩演示；请用在本地设置的账号获取访问令牌。
 
 - `/api/v1/admin/**` 的 URL 基线允许 ADMIN/CONTENT_OPERATOR；
 - 用户管理、盲盒模板、订单管理、轮播图、推荐位、数据概览端点额外使用 `@PreAuthorize("hasRole('ADMIN')")`，内容运营/普通用户访问返回 **403**。
@@ -42,8 +42,8 @@
       {
         "id": 2,
         "username": "user2",
-        "email": "user2@example.com",
-        "phone": "13800000002",
+        "email": "<email>",
+        "phone": "<phone>",
         "avatarUrl": "https://img.example.com/2.jpg",
         "role": "USER",
         "status": "ACTIVE",

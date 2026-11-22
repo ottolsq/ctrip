@@ -290,10 +290,10 @@ logging.level.com.ctrip.user.service.StubSmsServiceImpl=DEBUG
 logging.level.com.ctrip.user.service.StubEmailServiceImpl=DEBUG
 
 # ===== 数据源 =====
-# 开发阶段使用硬编码明文（见"数据库凭据 C-1"说明），生产环境须改为环境变量注入
+# 使用外部配置提供数据库账号与口令，不在文档中写入实际值。
 spring.datasource.url=jdbc:mysql://localhost:3306/ctrip?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
-spring.datasource.username=root
-spring.datasource.password=123456
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
 # ===== MyBatis Plus =====
@@ -309,8 +309,8 @@ mybatis-plus.global-config.db-config.id-type=auto
 # 注意：不使用 MyBatis Plus 逻辑删除插件，软删除通过 UserStatus.DELETED（status=3）实现
 
 # ===== JWT =====
-# 开发阶段使用硬编码测试密钥，生产环境须通过环境变量 JWT_SECRET 注入 256-bit 随机值
-app.jwt.secret=VGhpcyBpcyBhIHNlY3VyZSByYW5kb20ga2V5IGZvciBKV1Qgc2lnbmluZw==
+# 使用环境变量注入签名密钥，不设置示例默认值。
+app.jwt.secret=${JWT_SECRET}
 # access token 有效期：15 分钟（毫秒）
 app.jwt.access-token-expiration-ms=900000
 # refresh token 有效期：15 天（毫秒）
@@ -520,16 +520,14 @@ public record ApiResponse<T>(boolean success, T data, String error) {
 
 #### 数据库凭据（C-1）
 
-开发阶段 `application.properties` 中数据库用户名/密码使用硬编码明文：
+以下为外部配置占位示例，不包含账号或口令的默认值：
 
 ```properties
-spring.datasource.username=root
-spring.datasource.password=123456
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
 ```
 
-这是**有意为之**的开发期便捷配置，降低本地搭建环境的门槛。  
-**生产部署前必须**将其替换为环境变量注入（`${DB_USERNAME}` / `${DB_PASSWORD}`），
-并在 CI/CD 流程中通过 Secrets Manager 或 Kubernetes Secret 注入，禁止将凭据提交到代码仓库。
+本地运行时，通过环境变量或未纳入版本控制的本机配置提供实际值。启动配置见[本地开发指南](dev_environment.md#31-账号与数据库)。
 
 #### 短信桩实现：`StubSmsServiceImpl`
 
@@ -594,7 +592,7 @@ spring.datasource.password=123456
 
 | 编号 | 级别 | 问题 | 修复方式 |
 |------|------|------|---------|
-| C-1 | — | 开发期 DB 凭据硬编码明文 | 有意保留，见[上方说明](#数据库凭据c-1) |
+| C-1 | — | 数据库凭据不应写入文档 | 示例仅使用占位符，见[数据库凭据](#数据库凭据c-1) |
 | C-2 | HIGH | Stub 实现使用 `log.info` 打印 OTP，在聚合日志中可被采集 | 改为 `log.debug`；`@Profile("!prod")` 限定非生产环境激活 |
 | C-3 | HIGH | `JwtAuthenticationFilter` / `SecurityConfig` / `RateLimitInterceptor` 手拼 JSON 字符串，格式不保证与 `ApiResponse` 一致 | 注入 `ObjectMapper`，统一调用 `objectMapper.writeValueAsString(ApiResponse.error(...))` |
 | C-4 | HIGH | `RateLimitInterceptor.resolveClientIp` 信任可伪造的 `X-Forwarded-For` 头，攻击者可绕过 IP 限流 | 移除 XFF 读取，直接使用 `request.getRemoteAddr()`；生产通过 `server.forward-headers-strategy=NATIVE` 在容器层还原真实 IP |

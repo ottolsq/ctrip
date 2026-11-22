@@ -1,6 +1,6 @@
 # 盲盒模块 Redis 分布式锁设计
 
-> 基于 Redisson 实现，用于限定盲盒库存扣减和开盒操作的并发安全控制。
+> 第 1–3 节记录早期 Redisson 锁设计，不作为当前开盒流程或接口的说明。现行链路见第 4 节。
 
 ---
 
@@ -176,40 +176,9 @@ orderId 是数据库自增主键（Long），orderNo 是业务编号（String）
 
 ---
 
-## 4. RabbitMQ 预留设计（MVP 阶段未接入）
+## 4. 现行异步链路
 
-> 详见 `docs/blindbox_module.md` 第十章，以下设计在 MVP 阶段暂不实现，保留文档供后续迭代接入。
+- **开盒**：请求写入开盒事件发件箱（Outbox），再由 RabbitMQ 消费者异步生成旅行方案。锁用于协调请求，不负责执行 AI 生成。
+- **限定秒杀**：Redis Lua 原子预扣库存并防止重复购买，RabbitMQ 消费者异步建单。这与普通购买的库存扣减是两条链路，不以请求量达到阈值作为切换条件。
 
-### 4.1 订单状态事件
-
-**Exchange/Topic：** `order.status.events`
-
-| 消费者组 | 职责 | 动作 |
-|---------|------|------|
-| `order-notification-service` | 用户通知 | 发送站内通知 + 短信 |
-| `blind-box-generation-service` | 盲盒方案生成 | 根据预选参数生成旅行方案 |
-| `inventory-deduction-service` | 库存扣减 | 扣减/恢复 blind_box_template.stock |
-| `order-analytics-service` | 业务统计 | 更新日销售额、订单量 |
-
-### 4.2 开盒事件
-
-**Exchange/Topic：** `blindbox.open.events`
-
-| 消费者 | 职责 | 动作 |
-|-------|------|------|
-| `result-generation-service` | AI 生成方案 | 调用 LLM API 生成旅行方案 |
-| `image-generation-service` | 可视化行程图 | **暂不实现**：AI 生成结果图 |
-| `notification-service` | 通知用户 | 推送"你的盲盒已就绪！" |
-
-### 4.3 高并发库存扣升级方案
-
-> 当限定盲盒 QPS > 1000 时，当前方案升级为 Redis Lua 预扣库存 + RabbitMQ 异步创建订单。
-
-```
-1. Redis Lua 脚本预扣库存（原子操作，不经过 DB）
-2. 扣减成功 → 发送订单消息到 RabbitMQ → 异步消费创建订单
-3. 扣减失败 → 直接返回库存不足
-4. 订单超时取消 → 发送恢复库存消息 → Redis Lua 恢复 + DB 同步
-```
-
-详见 `docs/other/redis_rabbitmq_design.md` 第 9.4 节。
+库存扣减、事件处理和接口以[盲盒模块说明](../blindbox_module.md)及[盲盒 API](../blindbox_api.md)为准。

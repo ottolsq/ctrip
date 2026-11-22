@@ -1,6 +1,6 @@
 # 盲盒模块逻辑分析
 
-> 基于 `docs/ctrip_modules.md` 和 `docs/ctrip_plan.md` 中 Phase 4 的设计方案，参考 `docs/user_module.md` 的文档结构编写。
+> 本文说明盲盒模块的设计。项目阶段与当前范围见[项目首页](../../README.md#开发阶段与当前范围)，接口细节见[盲盒 API](blindbox_api.md)。
 > 所有 API 接口遵循 `docs/other/api_standards.md` 规范，代码实现参考 `docs/other/redis_rabbitmq_design.md`。
 
 ---

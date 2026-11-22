@@ -380,12 +380,11 @@ com.ctrip.content/
 **流程：**
 
 1. 接收 MultipartFile 文件
-2. 校验：文件大小 ≤ 5MB、文件头校验（jpg/png/webp）
-3. 调用 `ImageStorageService.upload()`
-4. MVP 阶段：保存到 `uploads/images/` 目录，按日期分目录（如 `2026/05/18/xxx.jpg`）
-5. 返回可访问 URL：`{ "url": "/uploads/images/2026/05/18/xxx.jpg" }`
+2. 调用 `ImageStorageService.upload()`，校验单文件大小（默认不超过 5 MB）、扩展名（`.jpg`、`.jpeg`、`.png`、`.webp`）和与扩展名对应的文件头。
+3. 生成 UUID 文件名，直接保存到配置的上传目录，不按日期分层。
+4. 返回可访问 URL，例如 `{ "url": "/uploads/images/abc123.jpg" }`。上传只负责存储，图片用途由使用该 URL 的业务接口决定。
 
-**关键代码位置：** `UploadController.uploadImage()` → `LocalStorageServiceImpl.upload()`
+**关键代码位置：** `UploadController.upload()` → `LocalStorageServiceImpl.upload()`。请求和响应示例见[上传接口](content_api.md#上传接口)。
 
 ---
 
@@ -393,8 +392,8 @@ com.ctrip.content/
 
 **流程：**
 
-1. 接收多个 MultipartFile
-2. 逐个调用 `ImageStorageService.upload()`
+1. 接收多个 MultipartFile，默认单文件上限为 5 MB，整个请求上限为 50 MB。
+2. 逐个调用 `ImageStorageService.upload()`，沿用单文件校验。
 3. 返回 URL 数组：`{ "urls": ["url1", "url2", ...] }`
 
 ---
@@ -407,6 +406,8 @@ com.ctrip.content/
 2. 调用 `ImageStorageService.delete()`
 3. 从本地目录删除文件
 4. 返回成功
+
+删除接口需要登录，当前不校验图片所有者，见[技术债登记 CONTENT-7](other/technical_debt.md#3-内容--运营)。
 
 ---
 
@@ -434,10 +435,8 @@ public interface ImageStorageService {
 
 ### LocalStorageServiceImpl（MVP 实现）
 
-- 存储路径：`{项目根目录}/uploads/images/{year}/{month}/{day}/{UUID}.{ext}`
-- 访问 URL：通过 `WebConfig.addResourceHandlers()` 注册静态资源映射
-- 文件名：使用 UUID 避免冲突
-- 目录结构：按日期分层，避免单目录文件过多
+- 存储路径：`app.upload.dir` 指定目录，默认 `uploads/images/`，文件名为 `{UUID}.{ext}`。
+- 访问 URL：`app.upload.base-url` 指定前缀，默认 `/uploads/images`。`WebConfig` 注册 `/uploads/**` 静态资源映射；静态读取不需要登录。
 
 ---
 

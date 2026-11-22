@@ -116,27 +116,39 @@ ctrip/
 wsl -d Ubuntu-24.04 -u root -- bash -lc 'systemctl start mysql redis-server rabbitmq-server'
 ```
 
-- MySQL：`root / 123456`，数据库 `ctrip`
-- RabbitMQ 管理台：http://localhost:15672（`guest / guest`）
+- MySQL：本地数据库 `ctrip`；连接账号使用本机开发配置。
+- RabbitMQ 管理台：`http://localhost:15672`；用本地配置的账号登录。
 - 详细安装、配置、数据库导入与 API 级 E2E 说明见 [ctrip-backend/docs/other/dev_environment.md](ctrip-backend/docs/other/dev_environment.md)
 
 ### 后端
 
-```bash
-cd ctrip-backend
-# 启动前确保 MySQL、Redis、RabbitMQ 已运行，并修改 application.properties
-./mvnw spring-boot:run
-# 后端默认端口 8080
+启动前确认 MySQL、Redis、RabbitMQ 已运行，并按[本地开发指南](ctrip-backend/docs/other/dev_environment.md)初始化数据库、核对 `application.properties`。
+
+```powershell
+# Windows PowerShell：从仓库根目录执行
+Set-Location .\ctrip-backend
+.\mvnw.cmd spring-boot:run
 ```
+
+```bash
+# WSL：从仓库根目录执行，使用 WSL 中的 JDK
+cd ctrip-backend
+bash ./mvnw spring-boot:run
+```
+
+如果 Maven Wrapper 下载报 `403`，看[Wrapper 排查](ctrip-backend/docs/other/dev_environment.md#maven-wrapper-下载报-403)。
 
 ### 前端
 
-```bash
+在另一个终端从仓库根目录执行：
+
+```powershell
 cd ctrip-frontend
 npm install
 npm run dev
-# 前端默认端口 3000，代理已配置到 http://localhost:8080
 ```
+
+开发时访问 `http://localhost:3000`（实际端口以 Vite 输出为准），Vite 将 `/api` 和 `/uploads` 转发到后端 `8080`。部署演练则使用 nginx `8088` 和后端 jar `8081`。
 
 ---
 
@@ -144,14 +156,34 @@ npm run dev
 
 根目录 `docs/` 存放毕业设计任务书、设计与实施计划（本地文档，不纳入版本库）。
 
-后端设计文档位于 `ctrip-backend/docs/`：
+| 想做什么 | 从哪里读 |
+|---|---|
+| 启动与联调 | [本地开发指南](ctrip-backend/docs/other/dev_environment.md)、[数据库脚本](ctrip-backend/docs/SQL/) |
+| 查看接口 | [用户](ctrip-backend/docs/user_api.md)、[内容](ctrip-backend/docs/content_api.md)、[行程](ctrip-backend/docs/itinerary_api.md)、[盲盒](ctrip-backend/docs/blindbox_api.md)、[管理端](ctrip-backend/docs/admin_api.md) |
+| 部署演练 | [Windows jar + WSL nginx](deploy/DEPLOYMENT.md) |
+| 查验收或遗留问题 | [P2 阶段验收](ctrip-backend/docs/other/p2_acceptance.md)、[技术债登记](ctrip-backend/docs/other/technical_debt.md) |
+| 回看设计 | [模块与业务流程设计](ctrip-backend/docs/ctrip_modules.md)、[盲盒模块设计](ctrip-backend/docs/blindbox_module.md) |
+| 图片上传 | [接口用法](ctrip-backend/docs/content_api.md#上传接口)、[存储与校验](ctrip-backend/docs/content_module.md) |
 
-- `ctrip_modules.md`：功能模块、业务流程、数据库设计
-- `ctrip_plan.md`：开发计划、接口设计、MVP 范围
-- `SQL/`：MySQL 建表与示例数据脚本
-- `other/dev_environment.md`：WSL2 中间件版本、启动与联调说明
-- `other/`：详细方案设计、测试方案、项目亮点
-- `admin_api.md`：管理端接口（P1.1 用户管理 + P1.2 内容审核/评论/内容数据 + P1.3 盲盒模板/订单 + P1.4 轮播图/推荐位/数据概览）
+### 开发阶段与当前范围
+
+早期 MVP 从用户与认证开始，逐步加入目的地与攻略、多日行程与分享、盲盒购买与开盒。后台管理和运营功能随后加入。前端现已覆盖用户端和管理端。
+
+- P0 用户端补齐了攻略收藏和行程分享。参见[内容 API](ctrip-backend/docs/content_api.md)、[行程 API](ctrip-backend/docs/itinerary_api.md)和 [P0 回归脚本](ctrip-backend/scripts/e2e_p0.py)。
+- P1.1 在现有前端加入 `/admin`，提供用户列表、封禁与解封功能。前端按角色显示菜单，后端校验操作权限。参见[管理端 API](ctrip-backend/docs/admin_api.md)和 [P1.1 回归脚本](ctrip-backend/scripts/e2e_admin_p11.py)。
+- P3 公开上架盲盒的各档概率和保底次数，并提供用户抽取记录及管理员查询。参见[盲盒 API](ctrip-backend/docs/blindbox_api.md#概率公示)、[管理端 API](ctrip-backend/docs/admin_api.md)和 [P3 回归脚本](ctrip-backend/scripts/e2e_admin_p3.py)。
+- 盲盒开盒后，订单所有者可把方案导入为草稿行程。重复导入返回同一行程。参见[导入接口](ctrip-backend/docs/blindbox_api.md#开盒结果导入行程)和 [P0 回归脚本](ctrip-backend/scripts/e2e_p0.py)。
+
+项目用于个人学习和本地演示，不提供机票或酒店比价与预订。演示可从浏览攻略和创建行程开始，再完成盲盒模拟支付、异步开盒和结果导入行程。生成旅行方案需要 DashScope。接口和运行方式见上表。
+
+攻略和目的地列表支持关键词筛选，不提供全站统一搜索。行程和盲盒结果的分享链接有效期均为 7 天；行程取消分享后，原链接立即失效。
+
+### 验证脚本
+
+后端 Maven 测试可在 PowerShell 中运行。进入 `ctrip-backend` 后执行 `.\mvnw.cmd test`。对应源码见[缓存读写测试](ctrip-backend/src/test/java/com/ctrip/content/cache/CacheServiceTest.java)、[订单状态机测试](ctrip-backend/src/test/java/com/ctrip/blindbox/service/BlindBoxOrderStateMachineTest.java)、[秒杀消费者测试](ctrip-backend/src/test/java/com/ctrip/blindbox/messaging/FlashSaleOrderConsumerTest.java)和[开盒消息投递测试](ctrip-backend/src/test/java/com/ctrip/blindbox/messaging/OpenRequestOutboxTest.java)。
+
+以下脚本位于 [`ctrip-backend/scripts/`](ctrip-backend/scripts/)：
+
 - `scripts/e2e_p0.py`：P0 用户端 API 级端到端验证脚本
 - `scripts/e2e_admin_p11.py`：P1.1 管理端 API 级端到端验证脚本
 - `scripts/e2e_admin_p12.py`：P1.2 内容运营 API 级端到端验证脚本
@@ -162,8 +194,5 @@ npm run dev
 - `scripts/e2e_admin_p3.py`：P3 概率/保底/抽取记录 API 级端到端验证脚本
 - `scripts/e2e_flash_sale.py`：限定盲盒秒杀 API 端到端验证，覆盖顺序抢购和未预热模板的并发首抢
 - 秒杀失败回归：仅在本地隔离 QA 后端（8080、独立 MySQL 库、RabbitMQ vhost 和 Redis DB）运行。安装有 `redis-cli` 的环境可用 `FLASH_E2E_REDIS_DB=13 python3 ctrip-backend/scripts/e2e_flash_sale.py`；DB 号必须与 QA 后端一致。脚本会对新建测试模板注入一份陈旧的 Redis 库存。
-- `other/p2_acceptance.md`：P2 测试、压测与部署验收记录
-- `other/technical_debt.md`：剩余技术债登记（不阻塞验收）
-- 仓库根目录 `deploy/DEPLOYMENT.md`：jar + WSL nginx 部署试运行说明
 
 ---

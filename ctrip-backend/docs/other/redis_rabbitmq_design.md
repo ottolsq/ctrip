@@ -519,8 +519,8 @@ app.redis.key-prefix=ctrip:
 # RabbitMQ 连接配置
 spring.rabbitmq.host=localhost
 spring.rabbitmq.port=5672
-spring.rabbitmq.username=guest
-spring.rabbitmq.password=guest
+spring.rabbitmq.username=${SPRING_RABBITMQ_USERNAME}
+spring.rabbitmq.password=${SPRING_RABBITMQ_PASSWORD}
 spring.rabbitmq.listener.simple.concurrency=2
 spring.rabbitmq.listener.simple.max-concurrency=10
 spring.rabbitmq.listener.simple.prefetch=10

@@ -212,7 +212,7 @@ Authorization: Bearer <access_token>
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/itineraries?page=1&limit=10&status=DRAFT" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -718,11 +718,11 @@ curl -X GET "http://localhost:8080/api/v1/itineraries?page=1&limit=10&status=DRA
 ```bash
 # 收藏行程
 curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=true" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 
 # 取消收藏
 curl -X POST "http://localhost:8080/api/v1/itineraries/1/collection?add=false" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)

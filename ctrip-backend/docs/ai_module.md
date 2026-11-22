@@ -357,7 +357,7 @@ AI 模块不直接操作数据库，仅作为**无状态的服务接口**。
 # ===== AI 模块 (DashScope / 通义千问) =====
 # API key 获取：https://bailian.console.aliyun.com/
 # 生产环境通过环境变量注入
-app.ai.dashscope.api-key=${AI_DASHSCOPE_API_KEY:sk-test-placeholder}
+app.ai.dashscope.api-key=${AI_DASHSCOPE_API_KEY}
 app.ai.dashscope.model=qwen-plus
 app.ai.dashscope.timeout-ms=25000
 # AI 调用失败时是否允许回退到 mock（由业务模块自行实现）

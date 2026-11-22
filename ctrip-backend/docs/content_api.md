@@ -523,7 +523,7 @@ curl -X GET "http://localhost:8080/api/v1/guides/1"
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/guides" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "杭州三日游攻略",
@@ -612,7 +612,7 @@ curl -X POST "http://localhost:8080/api/v1/guides" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/guides/1" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "杭州四日游攻略（更新版）"
@@ -703,7 +703,7 @@ curl -X PUT "http://localhost:8080/api/v1/guides/1" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/guides/1" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -746,7 +746,7 @@ curl -X DELETE "http://localhost:8080/api/v1/guides/1" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/guides/1/like" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -778,7 +778,7 @@ curl -X POST "http://localhost:8080/api/v1/guides/1/like" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/guides/1/like" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -896,7 +896,7 @@ curl -X GET "http://localhost:8080/api/v1/guides/1/comments"
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/guides/1/comments" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "content": "非常详细的攻略，谢谢分享！",
@@ -953,7 +953,7 @@ curl -X POST "http://localhost:8080/api/v1/guides/1/comments" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/guides/1/comments/4" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -1001,7 +1001,7 @@ curl -X DELETE "http://localhost:8080/api/v1/guides/1/comments/4" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/uploads/image" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -F "file=@/path/to/image.jpg"
 ```
 
@@ -1037,7 +1037,7 @@ curl -X POST "http://localhost:8080/api/v1/uploads/image" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/uploads/images" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -F "files=@/path/to/image1.jpg" \
   -F "files=@/path/to/image2.jpg" \
   -F "files=@/path/to/image3.jpg"
@@ -1078,7 +1078,7 @@ curl -X POST "http://localhost:8080/api/v1/uploads/images" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/uploads/abc123.jpg" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -1143,7 +1143,7 @@ curl -X DELETE "http://localhost:8080/api/v1/uploads/abc123.jpg" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/admin/destinations" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "杭州",
@@ -1215,7 +1215,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/destinations" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/admin/destinations/1" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "description": "更新后的简介"
@@ -1262,7 +1262,7 @@ curl -X PUT "http://localhost:8080/api/v1/admin/destinations/1" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/admin/destinations/1" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -1316,7 +1316,7 @@ curl -X DELETE "http://localhost:8080/api/v1/admin/destinations/1" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/admin/attractions" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "destinationId": 1,
@@ -1386,7 +1386,7 @@ curl -X POST "http://localhost:8080/api/v1/admin/attractions" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/admin/attractions/101" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "ticketPrice": 50.00
@@ -1422,7 +1422,7 @@ curl -X PUT "http://localhost:8080/api/v1/admin/attractions/101" \
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/v1/admin/attractions/101" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)

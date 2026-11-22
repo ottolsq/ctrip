@@ -95,10 +95,10 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "phone": "13800138000",
-  "smsCode": "123456",
-  "password": "SecurePass123",
-  "username": "张三"
+  "phone": "<PHONE_NUMBER>",
+  "smsCode": "<SMS_CODE>",
+  "password": "<PASSWORD>",
+  "username": "<USERNAME>"
 }
 ```
 
@@ -115,8 +115,8 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "refreshToken": "a1b2c3d4e5f6...",
+    "accessToken": "<ACCESS_TOKEN>",
+    "refreshToken": "<REFRESH_TOKEN>",
     "expiresIn": 900,
     "tokenType": "Bearer"
   },
@@ -165,9 +165,9 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "email": "user@example.com",
-  "password": "SecurePass123",
-  "username": "张三"
+  "email": "<EMAIL_ADDRESS>",
+  "password": "<PASSWORD>",
+  "username": "<USERNAME>"
 }
 ```
 
@@ -183,8 +183,8 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "refreshToken": "a1b2c3d4e5f6...",
+    "accessToken": "<ACCESS_TOKEN>",
+    "refreshToken": "<REFRESH_TOKEN>",
     "expiresIn": 900,
     "tokenType": "Bearer"
   },
@@ -224,16 +224,16 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "credential": "user@example.com",
-  "password": "SecurePass123"
+  "credential": "<EMAIL_ADDRESS>",
+  "password": "<PASSWORD>"
 }
 ```
 
 ```json
 // 或使用手机号登录
 {
-  "credential": "13800138000",
-  "password": "SecurePass123"
+  "credential": "<PHONE_NUMBER>",
+  "password": "<PASSWORD>"
 }
 ```
 
@@ -248,8 +248,8 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "refreshToken": "a1b2c3d4e5f6...",
+    "accessToken": "<ACCESS_TOKEN>",
+    "refreshToken": "<REFRESH_TOKEN>",
     "expiresIn": 900,
     "tokenType": "Bearer"
   },
@@ -289,7 +289,7 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "refreshToken": "a1b2c3d4e5f6..."
+  "refreshToken": "<REFRESH_TOKEN>"
 }
 ```
 
@@ -303,8 +303,8 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "refreshToken": "newRefreshToken...",
+    "accessToken": "<ACCESS_TOKEN>",
+    "refreshToken": "<REFRESH_TOKEN>",
     "expiresIn": 900,
     "tokenType": "Bearer"
   },
@@ -347,7 +347,7 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "refreshToken": "a1b2c3d4e5f6..."
+  "refreshToken": "<REFRESH_TOKEN>"
 }
 ```
 
@@ -383,7 +383,7 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "phone": "13800138000"
+  "phone": "<PHONE_NUMBER>"
 }
 ```
 
@@ -430,14 +430,14 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "credential": "user@example.com"
+  "credential": "<EMAIL_ADDRESS>"
 }
 ```
 
 ```json
 // 或使用手机号
 {
-  "credential": "13800138000"
+  "credential": "<PHONE_NUMBER>"
 }
 ```
 
@@ -474,9 +474,9 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "credential": "user@example.com",
-  "otp": "123456",
-  "newPassword": "NewSecurePass123"
+  "credential": "<EMAIL_ADDRESS>",
+  "otp": "<OTP>",
+  "newPassword": "<NEW_PASSWORD>"
 }
 ```
 
@@ -529,7 +529,7 @@ Authorization: Bearer <access_token>
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/users/me" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <ACCESS_TOKEN>"
 ```
 
 #### 成功响应 (200)
@@ -539,9 +539,9 @@ curl -X GET "http://localhost:8080/api/v1/users/me" \
   "success": true,
   "data": {
     "id": 1,
-    "username": "张三",
-    "email": "user@example.com",
-    "phone": "138****8000",
+    "username": "<USERNAME>",
+    "email": "<EMAIL_ADDRESS>",
+    "phone": "<PHONE_NUMBER>",
     "avatarUrl": "https://example.com/avatar/123.jpg",
     "gender": "MALE",
     "birthday": "1990-01-15",
@@ -598,7 +598,7 @@ curl -X GET "http://localhost:8080/api/v1/users/me" \
 
 ```json
 {
-  "username": "新用户名",
+  "username": "<USERNAME>",
   "avatarUrl": "https://example.com/new-avatar.jpg",
   "gender": "MALE",
   "birthday": "1990-01-15",
@@ -618,10 +618,10 @@ curl -X GET "http://localhost:8080/api/v1/users/me" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/users/me" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "新用户名",
+    "username": "<USERNAME>",
     "gender": "MALE"
   }'
 ```
@@ -633,9 +633,9 @@ curl -X PUT "http://localhost:8080/api/v1/users/me" \
   "success": true,
   "data": {
     "id": 1,
-    "username": "新用户名",
-    "email": "user@example.com",
-    "phone": "138****8000",
+    "username": "<USERNAME>",
+    "email": "<EMAIL_ADDRESS>",
+    "phone": "<PHONE_NUMBER>",
     "avatarUrl": "https://example.com/avatar/123.jpg",
     "gender": "MALE",
     "birthday": "1990-01-15",
@@ -683,8 +683,8 @@ curl -X PUT "http://localhost:8080/api/v1/users/me" \
 
 ```json
 {
-  "currentPassword": "OldPass123",
-  "newPassword": "NewSecurePass456"
+  "currentPassword": "<CURRENT_PASSWORD>",
+  "newPassword": "<NEW_PASSWORD>"
 }
 ```
 
@@ -697,11 +697,11 @@ curl -X PUT "http://localhost:8080/api/v1/users/me" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/users/me/password" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "currentPassword": "OldPass123",
-    "newPassword": "NewSecurePass456"
+    "currentPassword": "<CURRENT_PASSWORD>",
+    "newPassword": "<NEW_PASSWORD>"
   }'
 ```
 
@@ -760,7 +760,7 @@ curl -X PUT "http://localhost:8080/api/v1/users/me/password" \
 
 ```bash
 curl -X PUT "http://localhost:8080/api/v1/users/me/avatar" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "avatarUrl": "https://example.com/new-avatar.jpg"
@@ -774,9 +774,9 @@ curl -X PUT "http://localhost:8080/api/v1/users/me/avatar" \
   "success": true,
   "data": {
     "id": 1,
-    "username": "张三",
-    "email": "user@example.com",
-    "phone": "138****8000",
+    "username": "<USERNAME>",
+    "email": "<EMAIL_ADDRESS>",
+    "phone": "<PHONE_NUMBER>",
     "avatarUrl": "https://example.com/new-avatar.jpg",
     "gender": "MALE",
     "birthday": "1990-01-15",

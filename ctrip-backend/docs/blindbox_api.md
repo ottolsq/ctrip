@@ -263,7 +263,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/1"
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/blind-box/my?page=1&limit=20&opened=true" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -337,7 +337,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/my?page=1&limit=20&opened=tr
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/blind-box/orders" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "templateId": 1,
@@ -447,7 +447,7 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders" \
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/blind-box/orders?page=1&limit=20&status=PENDING" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -506,7 +506,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/orders?page=1&limit=20&statu
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/blind-box/orders/BB202606020001" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -567,7 +567,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/orders/BB202606020001" \
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/cancel" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -733,7 +733,7 @@ POST /open → 状态变为 PROCESSING → 立即返回 (HTTP 200)
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 — 首次开盒（处理中）(200)
@@ -848,7 +848,7 @@ curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/open"
 
 ```bash
 curl -X GET "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/result" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -933,7 +933,7 @@ curl -X GET "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/result
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/blind-box/orders/BB202606020001/share-result" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+  -H "Authorization: Bearer <access_token>"
 ```
 
 #### 成功响应 (200)
@@ -1243,7 +1243,7 @@ HTTP **200**，返回 `data.status`：`QUEUED`（尚未确认建单结果）、`
 
 ```bash
 curl -X POST "http://localhost:8080/api/v1/admin/blind-box/templates" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "夏日限定盲盒",
