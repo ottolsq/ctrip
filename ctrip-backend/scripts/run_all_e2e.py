@@ -6,6 +6,7 @@
     BASE_URL=http://localhost:8088/api/v1 python -I ctrip-backend/scripts/run_all_e2e.py
 
 登录/注册限流（429）时等待 65 秒并最多重跑当前脚本 2 次。
+每次运行限时 300 秒，超时终止子进程、报告已有输出并停止验收。
 """
 
 import os
@@ -26,26 +27,29 @@ SCRIPTS = [
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8080/api/v1")
 MAX_RETRIES = 2
 RETRY_WAIT_SECONDS = 65
+SCRIPT_TIMEOUT_SECONDS = 300
+
+
+def print_script_output(output):
+    for line in output.splitlines():
+        print("  " + line, flush=True)
 
 
 def run_script(script):
     path = os.path.join(ROOT, "ctrip-backend", "scripts", script)
-    env = {**os.environ, "BASE_URL": BASE_URL, "PYTHONUNBUFFERED": "1"}
+    env = {**os.environ, "BASE_URL": BASE_URL}
     print(f"\n===== {script} =====", flush=True)
-    lines = []
-    process = subprocess.Popen(
-        [sys.executable, "-I", path],
+    result = subprocess.run(
+        [sys.executable, "-I", "-u", "-X", "utf8", path],
         cwd=ROOT,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
+        timeout=SCRIPT_TIMEOUT_SECONDS,
     )
-    for line in process.stdout:
-        print("  " + line, end="", flush=True)
-        lines.append(line)
-    return process.wait(), "".join(lines)
+    output = result.stdout.decode("utf-8", errors="replace")
+    print_script_output(output)
+    return result.returncode, output
 
 
 def main():
@@ -54,7 +58,12 @@ def main():
     for script in SCRIPTS:
         for attempt in range(MAX_RETRIES + 1):
             script_started = time.time()
-            code, output = run_script(script)
+            try:
+                code, output = run_script(script)
+            except subprocess.TimeoutExpired as exc:
+                print(f"\nTIMEOUT {script} ({SCRIPT_TIMEOUT_SECONDS}s)", flush=True)
+                print_script_output((exc.stdout or b"").decode("utf-8", errors="replace"))
+                return 1
             elapsed = time.time() - script_started
             if code == 0:
                 print(f"PASS {script} ({elapsed:.1f}s)", flush=True)

@@ -157,7 +157,7 @@ npm run dev
 - `scripts/e2e_admin_p12.py`：P1.2 内容运营 API 级端到端验证脚本
 - `scripts/e2e_admin_p13.py`：P1.3 盲盒后台/库存/退款 API 级端到端验证脚本
 - `scripts/e2e_admin_p14.py`：P1.4 轮播图/推荐位/数据概览 API 级端到端验证脚本
-- `scripts/run_all_e2e.py`：一键运行全部 API E2E（含 429 重试）
+- `scripts/run_all_e2e.py`：一键运行全部 API E2E（含 429 重试）；每次子脚本运行限时 300 秒，超时终止并报告已有输出
 - `scripts/stress_blindbox.py`：LIMITED 库存并发压测脚本
 - `scripts/e2e_admin_p3.py`：P3 概率/保底/抽取记录 API 级端到端验证脚本
 - `scripts/e2e_flash_sale.py`：限定盲盒秒杀链路 API 级端到端验证脚本
