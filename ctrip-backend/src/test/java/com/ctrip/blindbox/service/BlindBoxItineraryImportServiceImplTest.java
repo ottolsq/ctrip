@@ -113,7 +113,7 @@ class BlindBoxItineraryImportServiceImplTest {
     private void mockLock() throws InterruptedException {
         RLock lock = mock(RLock.class);
         when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
     }
 
@@ -122,7 +122,6 @@ class BlindBoxItineraryImportServiceImplTest {
     void import_openedResult_shouldCreateItineraryWithDaysItemsHotelTransport() throws Exception {
         when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
         when(resultMapper.selectOne(any())).thenReturn(result(validResultText(), null));
-        when(resultMapper.selectById(100L)).thenReturn(result(validResultText(), null));
         mockLock();
         when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
                 .thenReturn(itineraryResponse(99L));
@@ -130,6 +129,7 @@ class BlindBoxItineraryImportServiceImplTest {
         when(itineraryService.addItem(anyLong(), anyLong(), eq(1L), any()))
                 .thenReturn(new ItineraryItemResponse(
                         1L, 11L, "ATTRACTION", "西湖", "", "上午", "", 1));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         ItineraryResponse response = importService.importItinerary(1L, "BB202611220001");
 
@@ -187,7 +187,6 @@ class BlindBoxItineraryImportServiceImplTest {
     void import_invalidResultText_shouldThrow() throws Exception {
         when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
         when(resultMapper.selectOne(any())).thenReturn(result("{bad", null));
-        when(resultMapper.selectById(100L)).thenReturn(result("{bad", null));
         mockLock();
 
         assertThatThrownBy(() -> importService.importItinerary(1L, "BB202611220001"))
@@ -204,15 +203,79 @@ class BlindBoxItineraryImportServiceImplTest {
                 """;
         when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
         when(resultMapper.selectOne(any())).thenReturn(result(text, null));
-        when(resultMapper.selectById(100L)).thenReturn(result(text, null));
         mockLock();
         when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
                 .thenReturn(itineraryResponse(99L));
         when(itineraryService.getDetail(99L, 1L)).thenReturn(itineraryResponse(99L));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
 
         ItineraryResponse response = importService.importItinerary(1L, "BB202611220001");
 
         assertThat(response.id()).isEqualTo(99L);
         verify(itineraryService, never()).addItem(anyLong(), anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("条件更新 0 行：视为并发冲突并抛业务异常")
+    void import_conditionalUpdateZeroRows_shouldThrow() throws Exception {
+        when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
+        when(resultMapper.selectOne(any())).thenReturn(result(validResultText(), null));
+        mockLock();
+        when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
+                .thenReturn(itineraryResponse(99L));
+        when(itineraryService.addItem(anyLong(), anyLong(), eq(1L), any()))
+                .thenReturn(new ItineraryItemResponse(
+                        1L, 11L, "ATTRACTION", "西湖", "", "上午", "", 1));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> importService.importItinerary(1L, "BB202611220001"))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("超长字段与超大天数：按数据库/业务上限截断")
+    void import_longFieldsAndDays_shouldBeLimited() throws Exception {
+        String longText = "很长".repeat(100);
+        String text = """
+                {"destination":"%s","destinationId":3,"theme":"文化","days":100,
+                 "itinerary":{"day1":{"items":[
+                   "%s",
+                   {"name":"%s","location":"%s","timeSlot":"%s","type":"ACTIVITY"}
+                 ]}}}
+                """.formatted(longText, longText, longText, longText, longText);
+        when(orderMapper.selectOne(any())).thenReturn(order(OrderStatus.OPENED, 1L));
+        when(resultMapper.selectOne(any())).thenReturn(result(text, null));
+        mockLock();
+        when(itineraryService.createItinerary(eq(1L), any(CreateItineraryRequest.class)))
+                .thenReturn(itineraryResponse(99L));
+        when(itineraryService.getDetail(99L, 1L)).thenReturn(itineraryResponse(99L));
+        when(itineraryService.addItem(anyLong(), anyLong(), eq(1L), any()))
+                .thenReturn(new ItineraryItemResponse(
+                        1L, 11L, "ATTRACTION", "西湖", "", "上午", "", 1));
+        when(resultMapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        importService.importItinerary(1L, "BB202611220001");
+
+        ArgumentCaptor<CreateItineraryRequest> createCaptor =
+                ArgumentCaptor.forClass(CreateItineraryRequest.class);
+        verify(itineraryService).createItinerary(eq(1L), createCaptor.capture());
+        assertThat(createCaptor.getValue().title().length()).isLessThanOrEqualTo(100);
+        assertThat(java.time.temporal.ChronoUnit.DAYS.between(
+                createCaptor.getValue().startDate(), createCaptor.getValue().endDate()))
+                .isEqualTo(29);
+
+        ArgumentCaptor<CreateItineraryItemRequest> itemCaptor =
+                ArgumentCaptor.forClass(CreateItineraryItemRequest.class);
+        verify(itineraryService, org.mockito.Mockito.atLeastOnce())
+                .addItem(anyLong(), anyLong(), eq(1L), itemCaptor.capture());
+        for (CreateItineraryItemRequest item : itemCaptor.getAllValues()) {
+            assertThat(item.name().length()).isLessThanOrEqualTo(30);
+            if (item.location() != null) {
+                assertThat(item.location().length()).isLessThanOrEqualTo(255);
+            }
+            if (item.timeSlot() != null) {
+                assertThat(item.timeSlot().length()).isLessThanOrEqualTo(50);
+            }
+        }
     }
 }

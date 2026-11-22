@@ -13,6 +13,7 @@
 """
 
 import datetime
+import concurrent.futures
 import json
 import os
 import random
@@ -45,6 +46,18 @@ def call(method, path, body=None, token=None):
         print("RESPONSE:", json.dumps(payload, ensure_ascii=False)[:1200])
         raise SystemExit(1)
     return payload["data"]
+
+
+def call_status(method, path, token=None):
+    url = BASE + path
+    req = urllib.request.Request(url, method=method)
+    if token:
+        req.add_header("Authorization", "Bearer " + token)
+    try:
+        with urllib.request.urlopen(req, timeout=40) as response:
+            return response.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
 
 
 def main():
@@ -112,6 +125,8 @@ def main():
         "theme": "美食",
     }, token=token)
     order_no = order["orderNo"]
+    assert call_status(
+        "POST", f"/blind-box/orders/{order_no}/import-itinerary", token) == 403
     call("POST", "/payments/blind-box/callback",
          {"orderNo": order_no, "payMethod": "ALIPAY"}, token=token)
     opened = call("POST", f"/blind-box/orders/{order_no}/open", token=token)
@@ -128,16 +143,27 @@ def main():
     print("BLINDBOX OPEN OK, order=", order_no,
           "result_keys=", list(result.keys())[:8])
 
-    imported = call(
-        "POST", f"/blind-box/orders/{order_no}/import-itinerary", token=token)
-    assert imported and imported.get("days"), imported
-    itinerary_id = imported["id"]
+    def import_once():
+        return call(
+            "POST", f"/blind-box/orders/{order_no}/import-itinerary", token=token)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        imported_results = [future.result() for future in
+                            [pool.submit(import_once) for _ in range(2)]]
+    assert all(item and item.get("days") for item in imported_results), imported_results
+    assert len({item["id"] for item in imported_results}) == 1, imported_results
+    itinerary_id = imported_results[0]["id"]
     again = call(
         "POST", f"/blind-box/orders/{order_no}/import-itinerary", token=token)
-    assert again["id"] == itinerary_id, (again, imported)
+    assert again["id"] == itinerary_id, (again, imported_results)
     itinerary = call("GET", f"/itineraries/{itinerary_id}", token=token)
     assert itinerary.get("days"), itinerary
     assert any(day.get("items") for day in itinerary["days"]), itinerary
+    admin_token = call("POST", "/auth/login", {
+        "credential": "admin@example.com", "password": "Admin12345"
+    })["accessToken"]
+    assert call_status(
+        "POST", f"/blind-box/orders/{order_no}/import-itinerary", admin_token) == 403
     print("BLINDBOX IMPORT OK, itinerary=", itinerary_id,
           "days=", len(itinerary["days"]))
     print("E2E PASS")

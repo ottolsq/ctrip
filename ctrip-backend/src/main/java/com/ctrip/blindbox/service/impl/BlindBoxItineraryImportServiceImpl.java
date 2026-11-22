@@ -24,6 +24,7 @@ import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -77,7 +78,7 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ItineraryResponse importItinerary(Long userId, String orderNo) {
         BlindBoxOrder order = requireOrder(orderNo, userId);
         if (order.getStatus() != OrderStatus.OPENED) {
@@ -90,19 +91,27 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
 
         RLock lock = redissonClient.getLock(LOCK_PREFIX + result.getId());
         try {
-            if (!lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+            // 不指定 lease，交由 Redisson watchdog 续期
+            if (!lock.tryLock(3, TimeUnit.SECONDS)) {
                 throw new BusinessException("系统繁忙，请稍后重试");
             }
             try {
-                BlindBoxResult latest = resultMapper.selectById(result.getId());
+                // 加锁读最新数据，避免 REPEATABLE READ 快照看到旧的 imported_itinerary_id
+                BlindBoxResult latest = resultMapper.selectOne(
+                        new LambdaQueryWrapper<BlindBoxResult>()
+                                .eq(BlindBoxResult::getId, result.getId())
+                                .last("FOR UPDATE"));
                 if (latest != null && latest.getImportedItineraryId() != null) {
                     return itineraryService.getDetail(latest.getImportedItineraryId(), userId);
                 }
                 ItineraryResponse itinerary = doImport(userId, latest != null ? latest : result);
-                resultMapper.update(null, new LambdaUpdateWrapper<BlindBoxResult>()
+                int updated = resultMapper.update(null, new LambdaUpdateWrapper<BlindBoxResult>()
                         .eq(BlindBoxResult::getId, result.getId())
                         .isNull(BlindBoxResult::getImportedItineraryId)
                         .set(BlindBoxResult::getImportedItineraryId, itinerary.id()));
+                if (updated == 0) {
+                    throw new BusinessException("行程已导入，请刷新后重试");
+                }
                 return itineraryService.getDetail(itinerary.id(), userId);
             } finally {
                 if (lock.isHeldByCurrentThread()) {
@@ -126,7 +135,8 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
             throw new BusinessException("盲盒结果不存在，无法导入");
         }
 
-        int days = scheme.days() != null && scheme.days() > 0 ? scheme.days() : 3;
+        int days = scheme.days() != null && scheme.days() > 0
+                ? Math.min(scheme.days(), 30) : 3;
         LocalDate startDate = LocalDate.now();
         LocalDate endDate = startDate.plusDays(days - 1L);
         String title = buildTitle(scheme, days);
@@ -178,7 +188,8 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
         String name = (type.isBlank() ? "交通" : type) + (destination.isBlank() ? "" : ": " + destination);
         itineraryService.addItem(itineraryId, days.getFirst().id(), userId,
                 new CreateItineraryItemRequest(
-                        ItemType.TRANSPORT, truncate(name), "", text(transport.get("departureTime")),
+                        ItemType.TRANSPORT, limit(name, 30), "",
+                        limit(text(transport.get("departureTime")), 50),
                         description, 1));
     }
 
@@ -194,7 +205,7 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
         String rating = text(hotel.get("rating"));
         itineraryService.addItem(itineraryId, days.getLast().id(), userId,
                 new CreateItineraryItemRequest(
-                        ItemType.HOTEL, truncate(name), text(hotel.get("address")), "",
+                        ItemType.HOTEL, limit(name, 30), limit(text(hotel.get("address")), 255), "",
                         rating.isBlank() ? "" : "评分: " + rating, 99));
     }
 
@@ -212,8 +223,8 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
                 timeSlot = text(map.get("time"));
             }
             return new CreateItineraryItemRequest(
-                    type, truncate(name.isBlank() ? description : name),
-                    text(map.get("location")), timeSlot,
+                    type, limit(name.isBlank() ? description : name, 30),
+                    limit(text(map.get("location")), 255), limit(timeSlot, 50),
                     description, sortOrder);
         }
 
@@ -232,7 +243,7 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
             name = nameMatcher.group();
         }
         return new CreateItineraryItemRequest(
-                inferType(text), truncate(name), "", timeSlot, text, sortOrder);
+                inferType(text), limit(name, 30), "", limit(timeSlot, 50), text, sortOrder);
     }
 
     private ItemType inferType(String text) {
@@ -260,15 +271,15 @@ public class BlindBoxItineraryImportServiceImpl implements BlindBoxItineraryImpo
                 ? "盲盒" : scheme.destination();
         String theme = scheme.theme() == null || scheme.theme().isBlank()
                 ? "旅行" : scheme.theme();
-        return truncate(destination + "·" + theme + "·" + days + "天");
+        return limit(destination + "·" + theme + "·" + days + "天", 100);
     }
 
     private String text(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
-    private String truncate(String value) {
-        return value.length() > 200 ? value.substring(0, 200) : value;
+    private String limit(String value, int maxLength) {
+        return value.length() > maxLength ? value.substring(0, maxLength) : value;
     }
 
     private BlindBoxOrder requireOrder(String orderNo, Long userId) {
