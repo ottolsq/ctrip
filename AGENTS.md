@@ -29,7 +29,7 @@ npm run build
 python ctrip-backend/scripts/run_all_e2e.py
 ```
 
-在 WSL 中，从后端目录执行 `bash ./mvnw spring-boot:run` 或 `bash ./mvnw test`。启动排障见[本地开发指南](ctrip-backend/docs/other/dev_environment.md)。
+在 WSL 中，从后端目录执行 `bash ./mvnw spring-boot:run` 或 `bash ./mvnw test`。启动排障见[安装与本地运行](INSTALL.md)。
 
 ## 禁止事项
 
@@ -56,6 +56,8 @@ python ctrip-backend/scripts/run_all_e2e.py
 ## 文档指针
 
 - 目标与范围：`docs/goal.md`（本地，不提交）
-- 架构：`docs/architecture.md`（本地，不提交）
-- 模块与接口：`ctrip-backend/docs/`
-- 技术债：`ctrip-backend/docs/other/technical_debt.md`
+- 架构与模块设计：`docs/architecture.md`、`docs/modules/`（本地，不提交）
+- 接口契约：[API.md](API.md)；接口明细 `docs/api/`（本地，不提交）
+- 安装与本地运行：[INSTALL.md](INSTALL.md)
+- 技术债：`docs/plan.md` 的技术债表（本地，不提交）
+- 阶段结论：`docs/history/`（本地，不提交）
